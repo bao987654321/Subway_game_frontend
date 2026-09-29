@@ -31,7 +31,8 @@ main {
 }
 
 .clock-card,
-.wallet-card {
+.wallet-card,
+.player-state-card {
   width: 100%;
   max-width: 34rem;
   padding: clamp(1.5rem, 5vw, 2.5rem);
@@ -41,15 +42,25 @@ main {
   box-shadow: 0 12px 40px #11182708;
 }
 
-.wallet-card {
+.wallet-card,
+.player-state-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.wallet-card,
+.player-state-card {
   padding-block: 1.5rem;
 }
 
-.wallet-card h2 {
+.player-state-header {
+  flex-wrap: wrap;
+}
+
+.wallet-card h2,
+.player-state-card h2 {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
@@ -60,6 +71,69 @@ main {
   font-size: 2rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.player-state-card h2 {
+  flex-shrink: 0;
+}
+
+.player-state-value {
+  margin: 0;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #f0f4f8;
+  color: #344054;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.player-state-details {
+  display: grid;
+  gap: 1rem;
+  margin: 1.25rem 0 0;
+  border-top: 1px solid #edf0f4;
+  padding-top: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.player-state-details > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 1rem;
+}
+
+.player-state-details dt,
+.player-state-empty {
+  color: #667085;
+}
+
+.player-state-details dd {
+  margin: 0;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.player-state-trips {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.player-state-trips li {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.player-state-trips time {
+  color: #667085;
+  font-size: 0.8125rem;
 }
 
 .clock-header,
@@ -157,7 +231,8 @@ input[type='range']:focus-visible {
   }
 
   .clock-card,
-  .wallet-card {
+  .wallet-card,
+  .player-state-card {
     padding: 1.25rem;
   }
 }
