@@ -29,7 +29,7 @@ test('requests all remaining station trips using the local game time and weekday
   assert.deepEqual([...parsed.searchParams], [['station_id', 'A01'], ['time', '12:03:07'], ['day', 'weekday']])
   assert.equal(options.headers.Accept, 'application/json')
   assert.deepEqual(trips, [{
-    tripId: 'trip-A', routeId: 'A', headsign: 'Uptown', stopSequence: 4,
+    tripId: 'trip-A', routeId: 'A', directionId: null, headsign: 'Uptown', stopSequence: 4,
     arrivalGameTimeMs: localTime(12, 10), departureGameTimeMs: localTime(12, 10),
     serviceDateMs: localTime(0),
   }])
@@ -74,6 +74,15 @@ test('accepts absent or null headsigns without inventing a direction label', asy
   for (const trip_headsign of [undefined, null, '', '   ']) {
     fetchMock.mock.mockImplementation(async () => Response.json([trip({ trip_headsign })]))
     assert.equal((await fetchNextTrips('A01', localTime()))[0].headsign, null)
+  }
+})
+
+test('preserves numeric trip directions and normalizes unavailable directions to null', async (t) => {
+  const fetchMock = t.mock.method(globalThis, 'fetch')
+  for (const direction_id of [0, 1, undefined, null, '0', '1', -1, 2, false, {}]) {
+    fetchMock.mock.mockImplementation(async () => Response.json([trip({ direction_id })]))
+    const [result] = await fetchNextTrips('A01', localTime())
+    assert.equal(result.directionId, direction_id === 0 || direction_id === 1 ? direction_id : null)
   }
 })
 

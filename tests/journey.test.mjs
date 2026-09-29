@@ -35,6 +35,13 @@ test('copies a schedule and maps platform stops only through known parent statio
   assert.ok(Object.isFrozen(plan) && Object.isFrozen(plan.stops) && Object.isFrozen(plan.stops[0]))
 })
 
+test('preserves trip direction for the map without inferring missing directions', () => {
+  for (const directionId of [0, 1, null, undefined, '0', 2]) {
+    const plan = createJourneyPlan({ ...trip, directionId }, stops, 'L06', stationIds)
+    assert.equal(plan.directionId, directionId === 0 || directionId === 1 ? directionId : null)
+  }
+})
+
 test('uses exact catalog IDs before considering N/S suffixes', () => {
   const known = new Set(['L06N', 'L05N', 'L03N'])
   const plan = createJourneyPlan(trip, stops, 'L06N', known)

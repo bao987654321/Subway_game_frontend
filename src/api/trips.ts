@@ -8,6 +8,7 @@ export interface FetchTripsOptions {
 export interface ScheduledTrip {
   readonly tripId: string
   readonly routeId: string
+  readonly directionId: 0 | 1 | null
   readonly headsign: string | null
   readonly stopSequence: number
   readonly arrivalGameTimeMs: number
@@ -125,6 +126,7 @@ export async function fetchNextTrips(
     return Object.freeze({
       ...schedule,
       routeId: row.route_id,
+      directionId: row.direction_id === 0 || row.direction_id === 1 ? row.direction_id : null,
       headsign: typeof row.trip_headsign === 'string' && row.trip_headsign.trim() ? row.trip_headsign : null,
       serviceDateMs: date.getTime(),
     })

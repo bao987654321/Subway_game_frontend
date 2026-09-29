@@ -8,6 +8,7 @@ export interface JourneyStop extends TripStop {
 export interface JourneyPlan {
   readonly tripId: string
   readonly routeId: string
+  readonly directionId: 0 | 1 | null
   readonly headsign: string | null
   readonly boardingIndex: number
   readonly stops: readonly JourneyStop[]
@@ -112,6 +113,7 @@ export function createJourneyPlan(
   return Object.freeze({
     tripId: trip.tripId,
     routeId: trip.routeId,
+    directionId: trip.directionId === 0 || trip.directionId === 1 ? trip.directionId : null,
     headsign: trip.headsign,
     boardingIndex,
     stops: Object.freeze(normalized),

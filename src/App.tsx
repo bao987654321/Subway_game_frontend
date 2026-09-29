@@ -7,6 +7,7 @@ import { GameClockProvider } from './game-clock/GameClockProvider'
 import { GameStateProvider } from './game-state/GameStateProvider'
 import { WalletProvider } from './wallet/WalletProvider'
 import { RouteProgress } from './components/RouteProgress'
+import { RouteMap } from './components/RouteMap'
 
 function App() {
   const [playing, setPlaying] = useState(true)
@@ -22,6 +23,7 @@ function App() {
                 <Wallet />
                 <PlayerState />
                 <RouteProgress />
+                <RouteMap />
               </WalletProvider>
             </GameStateProvider>
           </GameClockProvider>

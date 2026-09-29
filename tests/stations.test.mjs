@@ -112,9 +112,9 @@ test('resolves station names in route batches while preserving all_stations orde
   const stations = await fetchStartingStations()
 
   assert.deepEqual(stations, [
-    { id: 'L06', name: '1 Av', onLines: ['L'] },
-    { id: 'A01', name: 'Same name', onLines: ['A', 'C'] },
-    { id: 'Z09', name: 'Same name', onLines: ['A'] },
+    { id: 'L06', name: '1 Av', onLines: ['L'], lat: 40.7, lon: -73.9 },
+    { id: 'A01', name: 'Same name', onLines: ['A', 'C'], lat: 40.7, lon: -73.9 },
+    { id: 'Z09', name: 'Same name', onLines: ['A'], lat: 40.7, lon: -73.9 },
   ])
   assert.equal(fetchMock.mock.callCount(), 4)
   assert.ok(Object.isFrozen(stations))
@@ -136,10 +136,46 @@ test('fetches individual details only for IDs absent from route responses', asyn
   })
 
   assert.deepEqual(await fetchStartingStations(), [
-    { id: 'MISSING', name: 'Transfer station', onLines: ['A', 'C'] },
-    { id: 'L06', name: '1 Av', onLines: ['L'] },
+    { id: 'MISSING', name: 'Transfer station', onLines: ['A', 'C'], lat: 40.7, lon: -73.9 },
+    { id: 'L06', name: '1 Av', onLines: ['L'], lat: 40.7, lon: -73.9 },
   ])
   assert.deepEqual(lookedUp, ['MISSING'])
+})
+
+test('keeps stations selectable when either coordinate is missing or invalid', async (t) => {
+  let coordinates
+  mockStationApi(t, {
+    '/all_stations': ['L06'],
+    '/all_routes': ['L'],
+    '/get_route_stations': () => [{ ...station('L06', '1 Av'), ...coordinates }],
+  })
+  for (const invalid of [
+    { lat: undefined }, { lon: undefined }, { lat: null }, { lon: null },
+    { lat: '40.7' }, { lon: '-73.9' }, { lat: NaN }, { lon: Infinity },
+    { lat: 90.1 }, { lat: -90.1 }, { lon: 180.1 }, { lon: -180.1 },
+  ]) {
+    coordinates = invalid
+    const [result] = await fetchStartingStations()
+    assert.equal(result.id, 'L06')
+    assert.equal(result.name, '1 Av')
+    assert.equal(result.lat, null)
+    assert.equal(result.lon, null)
+  }
+})
+
+test('preserves zero and valid coordinate boundaries from individual lookups', async (t) => {
+  let coordinates
+  mockStationApi(t, {
+    '/all_stations': ['L06'],
+    '/all_routes': [],
+    '/get_station': () => ({ ...station('L06'), ...coordinates }),
+  })
+  for (const valid of [{ lat: 0, lon: 0 }, { lat: 90, lon: 180 }, { lat: -90, lon: -180 }]) {
+    coordinates = valid
+    const [result] = await fetchStartingStations()
+    assert.equal(result.lat, valid.lat)
+    assert.equal(result.lon, valid.lon)
+  }
 })
 
 test('falls back to individual station details when a route request fails', async (t) => {

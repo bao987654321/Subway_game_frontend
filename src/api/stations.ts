@@ -9,6 +9,8 @@ export interface StationSummary {
   readonly id: string
   readonly name: string
   readonly onLines: readonly string[]
+  readonly lat: number | null
+  readonly lon: number | null
 }
 
 const MAX_CONCURRENT_REQUESTS = 6
@@ -32,10 +34,17 @@ function parseStation(value: unknown): StationSummary {
     throw new Error('Station service returned invalid station details.')
   }
 
+  const hasCoordinates = typeof station.lat === 'number' && Number.isFinite(station.lat) &&
+    station.lat >= -90 && station.lat <= 90 &&
+    typeof station.lon === 'number' && Number.isFinite(station.lon) &&
+    station.lon >= -180 && station.lon <= 180
+
   return Object.freeze({
     id: station.id,
     name: station.name,
     onLines: Object.freeze([...new Set(station.on_lines as string[])]),
+    lat: hasCoordinates ? station.lat as number : null,
+    lon: hasCoordinates ? station.lon as number : null,
   })
 }
 

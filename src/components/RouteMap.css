@@ -1,0 +1,255 @@
+.route-map-card {
+  width: 100%;
+  min-width: 0;
+  padding: 1.5rem clamp(1.5rem, 5vw, 2.5rem);
+  border: 1px solid #e2e6ec;
+  border-radius: 1.5rem;
+  background: #fff;
+  box-shadow: 0 12px 40px #11182708;
+}
+
+.route-map-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.route-map-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.route-map-header > span,
+.route-map-message,
+.route-map-note {
+  color: #667085;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.route-map-message,
+.route-map-note {
+  margin: 0.75rem 0 0;
+}
+
+.route-map-service {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.25rem 0 1rem;
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
+.route-map-badge {
+  flex-shrink: 0;
+  min-width: 2rem;
+  max-width: 35%;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.75rem;
+  color: #fff;
+  background: #2563eb;
+  text-align: center;
+  font-weight: 700;
+}
+
+.route-map-drawing {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.875rem;
+  background: #f8fafc;
+}
+
+.route-map-track,
+.route-map-player {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+}
+
+.route-map-player {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.route-map-line {
+  stroke: #93b4f3;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.route-map-north {
+  stroke: #64748b;
+  stroke-width: 2;
+  fill: none;
+}
+
+.route-map-north text {
+  stroke: none;
+  fill: #64748b;
+  font-size: 13px;
+}
+
+.route-map-stop {
+  cursor: pointer;
+  outline: none;
+}
+
+.route-map-stop-dot {
+  fill: #fff;
+  stroke: #5279a9;
+  stroke-width: 2;
+}
+
+.route-map-stop-current .route-map-stop-dot {
+  fill: #1d4ed8;
+  stroke: #1d4ed8;
+}
+
+.route-map-stop-next .route-map-stop-dot {
+  stroke: #1d4ed8;
+  stroke-width: 3;
+}
+
+.route-map-stop-halo {
+  fill: #bfdbfe;
+  stroke: #2563eb;
+  stroke-width: 1;
+}
+
+.route-map-stop:focus-visible .route-map-stop-halo {
+  opacity: 1;
+  stroke-width: 3;
+}
+
+.route-map-player-halo {
+  fill: #10b98133;
+}
+
+.route-map-player-dot {
+  fill: #047857;
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.route-map-player-label {
+  fill: #047857;
+}
+
+.route-map-player text {
+  fill: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.route-map-details {
+  padding: 0.875rem 1rem;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+
+.route-map-station-detail {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.route-map-station-detail span {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #667085;
+  font-size: 0.75rem;
+}
+
+.route-map-location {
+  margin: 0.5rem 0 0;
+  color: #475569;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.route-map-position-unavailable {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  background: #fff;
+  color: #667085;
+  font-size: 0.75rem;
+}
+
+.route-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-top: 1rem;
+  color: #475569;
+  font-size: 0.75rem;
+}
+
+.route-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.route-map-legend i {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+}
+
+.route-map-legend-you {
+  background: #047857;
+}
+
+.route-map-legend-current {
+  background: #1d4ed8;
+}
+
+.route-map-legend-next {
+  border: 2px solid #1d4ed8;
+  background: #fff;
+}
+
+.route-map-error p {
+  color: #b42318;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.route-map-error button {
+  min-height: 2.75rem;
+  border: 1px solid #2563eb;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  background: #2563eb;
+  color: #fff;
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.route-map-error button:hover {
+  background: #1d4ed8;
+}
+
+.route-map-error button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+
+@media (max-width: 380px) {
+  .route-map-card {
+    padding: 1.25rem;
+  }
+}

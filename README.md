@@ -148,6 +148,26 @@ Without an active journey, the card prompts the player to choose
 a trip. It reads the existing journey, shared clock, and station catalog, so
 it makes no additional API requests.
 
+### Route map
+
+The Map card below Route progress draws the selected line geographically on a
+plain background. It fits the full route automatically and shows every stop in
+the selected trip, including stops before boarding. Hover, focus, or tap a
+station to see its name; current and next stations have distinct markers.
+
+The green **You** marker uses the shared game clock. It stays at the boarding
+station while waiting, remains at each station during the stop, and moves in a
+straight line between station coordinates during travel. This is an estimated
+position: the backend shape can include other service variants and branches.
+Ending or canceling the journey clears the map.
+
+The frontend requests `GET /get_route_shape` with `route_id`, `simplify=true`,
+and the trip's `direction_id` when available. Successful shapes are cached by
+API base URL, route, and direction; clock ticks do not reload geometry. Station
+coordinates come from the existing catalog. Map loading errors offer a retry
+without blocking gameplay, and unavailable coordinates do not prevent station
+selection. The map uses React and SVG without street tiles or a map SDK.
+
 ### Schedule API
 
 The frontend calls `GET /get_next_trips` with the selected parent `station_id`,
