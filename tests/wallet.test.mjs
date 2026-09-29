@@ -120,3 +120,37 @@ test('publishes stable snapshots and preserves previously published balances', (
   assert.deepEqual(paid, { balance: 4.5 })
   assert.deepEqual(wallet.getSnapshot(), { balance: 4 })
 })
+
+test('earning adds to the balance and rejects invalid amounts', () => {
+  const wallet = createWallet(() => 0.5)
+
+  assert.equal(wallet.earn_money(1.25), true)
+  assert.deepEqual(wallet.getSnapshot(), { balance: 6.75 })
+
+  const before = wallet.getSnapshot()
+  for (const amount of [0, -1, NaN, Infinity, 0.001, Number.MAX_VALUE]) {
+    assert.equal(wallet.earn_money(amount), false, `earning ${amount}`)
+    assert.equal(wallet.getSnapshot(), before)
+  }
+})
+
+test('fines may overdraw the wallet, unlike payments', () => {
+  const wallet = createWallet(() => 0)
+
+  assert.equal(wallet.pay_money(50), false)
+  assert.deepEqual(wallet.getSnapshot(), { balance: 1 })
+  assert.equal(wallet.fine(50), true)
+  assert.deepEqual(wallet.getSnapshot(), { balance: -49 })
+  assert.equal(wallet.pay_money(0.01), false)
+  assert.equal(wallet.fine(0), false)
+})
+
+test('earning while overdrawn is allowed and can restore a positive balance', () => {
+  const wallet = createWallet(() => 0)
+
+  assert.equal(wallet.fine(5), true)
+  assert.equal(wallet.earn_money(1), true)
+  assert.deepEqual(wallet.getSnapshot(), { balance: -3 })
+  assert.equal(wallet.earn_money(4), true)
+  assert.deepEqual(wallet.getSnapshot(), { balance: 1 })
+})

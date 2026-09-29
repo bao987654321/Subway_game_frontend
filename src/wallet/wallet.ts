@@ -27,10 +27,10 @@ export function createWallet(random: () => number = Math.random) {
   let balanceCents = 100 + Math.floor(random() * 901)
   let snapshot: WalletSnapshot = { balance: balanceCents / 100 }
 
-  /** Applies a signed cent change if the result is valid. */
-  function applyDelta(deltaCents: number): boolean {
+  /** Applies a signed cent change; with preventOverdraft, rejects one that would go negative. */
+  function applyDelta(deltaCents: number, preventOverdraft: boolean): boolean {
     const next = balanceCents + deltaCents
-    if (next < 0 || !Number.isSafeInteger(next)) return false
+    if (!Number.isSafeInteger(next) || (preventOverdraft && next < 0)) return false
 
     balanceCents = next
     snapshot = { balance: balanceCents / 100 }
@@ -41,11 +41,16 @@ export function createWallet(random: () => number = Math.random) {
     getSnapshot: () => snapshot,
     pay_money(amount: number): boolean {
       const cents = toCents(amount)
-      return cents !== null && applyDelta(-cents)
+      return cents !== null && applyDelta(-cents, true)
     },
     earn_money(amount: number): boolean {
       const cents = toCents(amount)
-      return cents !== null && applyDelta(cents)
-    }
+      return cents !== null && applyDelta(cents, false)
+    },
+    /** Deducts a fine that may leave the balance negative. */
+    fine(amount: number): boolean {
+      const cents = toCents(amount)
+      return cents !== null && applyDelta(-cents, false)
+    },
   }
 }
