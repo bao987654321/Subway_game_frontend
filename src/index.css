@@ -1,0 +1,163 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #111827;
+  background: #f5f6f8;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+main {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.game-dashboard {
+  display: grid;
+  width: 100%;
+  max-width: 34rem;
+  gap: 1rem;
+}
+
+.clock-card,
+.wallet-card {
+  width: 100%;
+  max-width: 34rem;
+  padding: clamp(1.5rem, 5vw, 2.5rem);
+  border: 1px solid #e2e6ec;
+  border-radius: 1.5rem;
+  background: #ffffff;
+  box-shadow: 0 12px 40px #11182708;
+}
+
+.wallet-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 1.5rem;
+}
+
+.wallet-card h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.wallet-balance {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock-header,
+.speed-label,
+.speed-endpoints {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.clock-header h1 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.clock-timezone,
+.speed-endpoints,
+.clock-note {
+  color: #667085;
+  font-size: 0.8125rem;
+}
+
+.clock-display {
+  margin: 2.5rem 0;
+  text-align: center;
+}
+
+.clock-time {
+  display: block;
+  font-size: clamp(2.5rem, 10vw, 4.5rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+
+.clock-date {
+  margin: 0.75rem 0 0;
+  color: #667085;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.speed-control {
+  border-top: 1px solid #edf0f4;
+  padding-top: 1.5rem;
+}
+
+.speed-label {
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.speed-label output {
+  min-width: 3.5rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.5rem;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+input[type='range'] {
+  display: block;
+  width: 100%;
+  height: 1.75rem;
+  margin: 0;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+input[type='range']:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 4px;
+  border-radius: 0.25rem;
+}
+
+.speed-endpoints {
+  margin-top: 0.25rem;
+}
+
+.clock-note {
+  margin: 1.75rem 0 0;
+  line-height: 1.5;
+  text-align: center;
+}
+
+@media (max-width: 380px) {
+  main {
+    padding: 1rem;
+  }
+
+  .clock-card,
+  .wallet-card {
+    padding: 1.25rem;
+  }
+}
