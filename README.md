@@ -1,6 +1,7 @@
 # Subway Game Frontend
 
-A React + TypeScript app powered by Vite, with a shared game clock and wallet.
+A React + TypeScript app powered by Vite, with a shared game clock, wallet, and
+player state machine.
 
 ## Run locally
 
@@ -79,9 +80,67 @@ before React rerenders. The wallet has no deposits, persistence, or payment UI.
 ## Game state machine
 
 The [FSM definition](docs/game-state-machine.md) describes the six player states
-and eleven allowed transitions, starting in **Outside**. It includes leaving a
-station and getting off a stopped train. This is a definition only; runtime
-integration and controls will follow separately.
+and eleven allowed transitions, starting in **Outside**. The Player state card
+shows the current state and its information between the wallet and clock.
+
+`GameStateProvider` wraps the app inside `GameClockProvider`. Its optional
+`initialStationId` prop selects the starting station; without it, Outside has
+`stationId: null` and the card shows **Not selected**. Other components access
+the state-specific fields and send events through `useGameState()`. For example,
+a future station-entry control could use:
+
+```tsx
+import { useGameState } from './game-state/context'
+import { GAME_STATE_LABELS } from './game-state/state-machine'
+
+function StationEntrance() {
+  const { state, send } = useGameState()
+
+  function enterStation() {
+    const success = send({ type: 'ENTER_STATION', stationId: '101' })
+    if (!success) {
+      // The transition or its supplied information was invalid.
+    }
+  }
+
+  return (
+    <button onClick={enterStation}>
+      Enter station — {GAME_STATE_LABELS[state]}
+    </button>
+  )
+}
+```
+
+The hook returns a discriminated union: check `state` before reading that
+state's fields. Outside exposes `stationId`; In Station exposes `stationId` and
+`nextTrips`; Waiting exposes `stationId` and `tripId`; On Trip In Station exposes
+`tripId`, `stopArrivalGameTimeMs`, and `remainingStopTimeMs`; In Transit exposes
+`tripId`; and In Transit (Off At Next Station) exposes `tripId` and `nextStopId`.
+
+Supply upcoming trips as `{ tripId, departureGameTimeMs }` records on station
+entry or arrival. Timestamps are absolute epoch milliseconds on the game clock.
+The hook shows only departures from the current game time through the end of
+the local game day, sorted by departure time. The stopped-train countdown uses
+30 game seconds from the supplied stop arrival time, so boarding late does not
+restart the stop. Clock speed affects these derived fields.
+
+`send(event)` returns `true` after immediately committing an allowed transition.
+Consecutive calls use the latest state, even before React rerenders. An invalid
+event or missing required payload returns `false` and leaves the state and
+snapshot unchanged. Events needing new information use objects, for example
+`send({ type: 'WAIT_FOR_TRIP', tripId })` and
+`send({ type: 'BOARD_TRIP', stopArrivalGameTimeMs })`. Events needing no payload
+can still use strings, such as `send('CANCEL_WAIT')`. See the FSM document for
+the complete payload contract. State changes must follow the documented graph;
+there is no direct setter or reset event. Reloading or remounting the provider
+starts again in **Outside**.
+
+The current UI displays supplied and derived state information. It has no
+transition buttons or automatic events, so it stays **Outside** until a
+component sends an event. Clock ticks update the countdown and upcoming-trips
+view but do not trigger transitions, even when the countdown reaches zero.
+Wallet payments do not trigger transitions. Backend lookups, automatic
+scheduling, and fares are not connected yet.
 
 ## Checks and production build
 

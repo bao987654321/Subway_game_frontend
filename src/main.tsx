@@ -4,13 +4,16 @@ import './index.css'
 import App from './App.tsx'
 import { GameClockProvider } from './game-clock/GameClockProvider'
 import { WalletProvider } from './wallet/WalletProvider'
+import { GameStateProvider } from './game-state/GameStateProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <WalletProvider>
-      <GameClockProvider>
-        <App />
-      </GameClockProvider>
-    </WalletProvider>
+    <GameClockProvider>
+      <GameStateProvider>
+        <WalletProvider>
+          <App />
+        </WalletProvider>
+      </GameStateProvider>
+    </GameClockProvider>
   </StrictMode>,
 )
