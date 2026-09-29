@@ -33,7 +33,8 @@ main {
 .clock-card,
 .wallet-card,
 .player-state-card,
-.starting-station-card {
+.starting-station-card,
+.session-ended {
   width: 100%;
   max-width: 34rem;
   padding: clamp(1.5rem, 5vw, 2.5rem);
@@ -170,7 +171,10 @@ main {
 }
 
 .starting-station-card select,
-.starting-station-card button {
+.starting-station-card button,
+.game-controls select,
+.game-controls button,
+.session-ended button {
   width: 100%;
   min-height: 2.75rem;
   padding: 0.625rem 0.875rem;
@@ -180,36 +184,100 @@ main {
   font-size: 0.9375rem;
 }
 
-.starting-station-card select {
+.starting-station-card select,
+.game-controls select {
   color: #111827;
   background: #fff;
 }
 
-.starting-station-card button {
+.starting-station-card button,
+.game-controls button,
+.session-ended button {
   border-color: #2563eb;
   color: #fff;
   background: #2563eb;
   cursor: pointer;
 }
 
-.starting-station-card button:disabled {
+.starting-station-card button:disabled,
+.game-controls button:disabled {
   border-color: #e2e6ec;
   color: #667085;
   background: #f0f4f8;
   cursor: not-allowed;
 }
 
-.starting-station-card button:enabled:hover {
+.starting-station-card button:enabled:hover,
+.game-controls button:enabled:hover,
+.session-ended button:hover {
   background: #1d4ed8;
 }
 
-.starting-station-card :is(select, button):focus-visible {
+.starting-station-card :is(select, button):focus-visible,
+.game-controls :is(select, button):focus-visible,
+.session-ended button:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 3px;
 }
 
 #station-count {
   margin: 0 0 0.5rem;
+}
+
+.game-controls {
+  display: grid;
+  gap: 0.75rem;
+  border-top: 1px solid #edf0f4;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+}
+
+.game-controls form {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.game-controls select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.game-controls label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.game-controls p,
+.session-ended p {
+  margin: 0 0 0.5rem;
+  color: #667085;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.game-controls [role='alert'] {
+  color: #b42318;
+  overflow-wrap: anywhere;
+}
+
+.game-controls .secondary-button {
+  border-color: #cbd5e1;
+  color: #344054;
+  background: #fff;
+}
+
+.game-controls .secondary-button:enabled:hover {
+  background: #f0f4f8;
+}
+
+.session-ended h1 {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+}
+
+.session-ended button {
+  margin-top: 1rem;
 }
 
 .clock-header,
@@ -309,7 +377,8 @@ input[type='range']:focus-visible {
   .clock-card,
   .wallet-card,
   .player-state-card,
-  .starting-station-card {
+  .starting-station-card,
+  .session-ended {
     padding: 1.25rem;
   }
 }

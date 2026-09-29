@@ -1,13 +1,7 @@
 import { useGameState } from '../game-state/context'
 import { GAME_STATE_LABELS } from '../game-state/state-machine'
 import { useStationCatalog } from '../stations/context'
-
-const departureTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hourCycle: 'h23',
-})
+import { GameControls } from './GameControls'
 
 function StationField({ stationId }: { stationId: string | null }) {
   const { byId } = useStationCatalog()
@@ -38,22 +32,7 @@ function PlayerStateDetails({ info }: { info: ReturnType<typeof useGameState> })
           <StationField stationId={info.stationId} />
           <div>
             <dt>Trips remaining today</dt>
-            <dd>
-              {info.nextTrips.length === 0 ? (
-                <span className="player-state-empty">No upcoming trips supplied.</span>
-              ) : (
-                <ul className="player-state-trips">
-                  {info.nextTrips.map((trip) => (
-                    <li key={`${trip.tripId}:${trip.departureGameTimeMs}`}>
-                      <span>{trip.tripId}</span>
-                      <time dateTime={new Date(trip.departureGameTimeMs).toISOString()}>
-                        {departureTimeFormatter.format(trip.departureGameTimeMs)}
-                      </time>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </dd>
+            <dd>{info.nextTrips.length}</dd>
           </div>
         </>
       )
@@ -117,6 +96,7 @@ export function PlayerState() {
       <dl className="player-state-details">
         <PlayerStateDetails info={info} />
       </dl>
+      <GameControls />
     </section>
   )
 }

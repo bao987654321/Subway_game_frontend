@@ -220,6 +220,71 @@ test('cancelling waiting restores the original station and full departures', () 
   assert.deepEqual(machine.getSnapshot().nextTrips, nextTrips)
 })
 
+test('refreshing station trips replaces departures with an immutable copy', () => {
+  const machine = createMachineAt('in_station')
+  const initial = machine.getSnapshot()
+  const updatedTrips = [{ tripId: 'updated', departureGameTimeMs: now + 180_000 }]
+
+  assert.equal(machine.refreshStationTrips('101', updatedTrips), true)
+  const refreshed = machine.getSnapshot()
+  assert.deepEqual(refreshed, { state: 'in_station', stationId: '101', nextTrips: updatedTrips })
+  assert.notEqual(refreshed, initial)
+  assert.deepEqual(initial.nextTrips, nextTrips)
+  assert.equal(Object.isFrozen(refreshed), true)
+  assert.equal(Object.isFrozen(refreshed.nextTrips), true)
+  assert.equal(Object.isFrozen(refreshed.nextTrips[0]), true)
+  assert.equal(Object.isFrozen(updatedTrips), false)
+  assert.equal(Object.isFrozen(updatedTrips[0]), false)
+  updatedTrips[0].tripId = 'changed'
+  updatedTrips.push({ tripId: 'added', departureGameTimeMs: now })
+  assert.deepEqual(refreshed.nextTrips, [{ tripId: 'updated', departureGameTimeMs: now + 180_000 }])
+
+  assert.equal(machine.refreshStationTrips('101', []), true)
+  assert.deepEqual(machine.getSnapshot(), { state: 'in_station', stationId: '101', nextTrips: [] })
+})
+
+test('station trip refresh rejects stale station responses and malformed data atomically', () => {
+  const machine = createMachineAt('in_station')
+  const initial = machine.getSnapshot()
+  for (const stationId of ['201', '', '   ', null, undefined, 101, {}]) {
+    assert.equal(machine.refreshStationTrips(stationId, nextTrips), false)
+    assert.equal(machine.getSnapshot(), initial)
+  }
+  for (const trips of [
+    undefined, null, {}, [null], [{}],
+    [{ tripId: '', departureGameTimeMs: now }],
+    [{ tripId: 'trip', departureGameTimeMs: NaN }],
+    [{ tripId: 'trip', departureGameTimeMs: Infinity }],
+    [{ tripId: 'trip', departureGameTimeMs: 9e15 }],
+    [{ tripId: 'trip', departureGameTimeMs: '123' }],
+    [nextTrips[0], { tripId: 'invalid', departureGameTimeMs: null }],
+  ]) {
+    assert.equal(machine.refreshStationTrips('101', trips), false)
+    assert.equal(machine.getSnapshot(), initial)
+  }
+})
+
+test('station trip refresh cannot change another game state', () => {
+  for (const state of Object.keys(expectedTransitions).filter((state) => state !== 'in_station')) {
+    const machine = createMachineAt(state)
+    const initial = machine.getSnapshot()
+    assert.equal(machine.refreshStationTrips('101', nextTrips), false, state)
+    assert.equal(machine.getSnapshot(), initial)
+  }
+})
+
+test('cancelling a wait restores refreshed departures and ignores late refreshes', () => {
+  const machine = createMachineAt('in_station')
+  const updatedTrips = [{ tripId: 'updated', departureGameTimeMs: now + 180_000 }]
+  assert.equal(machine.refreshStationTrips('101', updatedTrips), true)
+  const refreshed = machine.getSnapshot()
+  assert.equal(machine.send({ type: 'WAIT_FOR_TRIP', tripId: 'updated' }), true)
+  assert.equal(machine.refreshStationTrips('101', nextTrips), false)
+  assert.equal(machine.send('CANCEL_WAIT'), true)
+  assert.deepEqual(machine.getSnapshot(), refreshed)
+  assert.equal(machine.getSnapshot().nextTrips, refreshed.nextTrips)
+})
+
 test('cancelling an exit removes its stop and preserves the trip on arrival', () => {
   const machine = createMachineAt('in_transit_off_at_next_station')
   assert.equal(machine.send('CANCEL_EXIT'), true)

@@ -38,23 +38,28 @@ the initial Outside state may have an unselected station.
 `stationId` identifies a parent station, while `nextStopId` identifies a stop
 on a trip. These are distinct IDs: a station may be `101` while its stop is
 `101S`. The caller supplies the parent station on arrival or disembarkation;
-the FSM does not guess it by stripping characters from a stop ID.
+the FSM does not resolve stop IDs itself. The journey layer accepts an exact
+known station ID or removes one final `N`/`S` only if the resulting parent ID
+exists in the loaded station catalog. It rejects schedules whose stops cannot
+be resolved by those checks.
 
 Upcoming trips are supplied by the caller, with absolute epoch-millisecond
 departure timestamps on the game clock. The model stores the supplied list;
 the hook derives `nextTrips` by including departures at or after the current
 game time and before the next local midnight, sorted earliest first. An empty
-list means no upcoming trips were supplied or remain in that interval. Leaving
-and later reentering a station requires a newly supplied list, while cancelling
-waiting restores the list retained for that station.
+list means no upcoming trips were supplied or remain in that interval. The
+provider fetches a new list on entry or return to a station, including after
+cancelling waiting. Cancellation immediately restores the retained list while
+the refreshed list loads. The Player state fields show a count; the trip
+chooser below them displays the available trip options.
 
 Each stop lasts **30 game seconds**. The model stores the supplied stop arrival
 timestamp; the hook derives `remainingStopTimeMs` as
 `clamp(stopArrivalGameTimeMs + 30_000 - gameTimeMs, 0, 30_000)`. Boarding partway
-through a stop uses that stop's original arrival time. Reaching zero does not
-send a departure event automatically. A future scheduling integration can use
-the trip ID and game time to resolve the current station; no such lookup is
-performed by the current frontend.
+through a stop uses that stop's original arrival time. Deriving the countdown
+does not mutate the pure FSM. The provider's scheduling layer observes game
+time and sends the departure event when the stop ends, or disembarks the player
+at the terminal.
 
 ## State diagram
 
@@ -112,8 +117,53 @@ stateDiagram-v2
 - `CANCEL_EXIT` means the player will stay aboard at the next arrival.
 - `LEAVE_STATION` is available only in **In Station**. A waiting player must
   cancel waiting first; an onboard player must get off first.
-- Arrival and departure events describe state changes. Their automatic timing
-  and triggers will be defined when scheduling is implemented.
+- Arrival and departure events describe state changes. The provider sends
+  these events as the shared game clock reaches the loaded journey schedule.
+- At the terminal, the player gets off automatically through `GET_OFF_TRIP`
+  after the final 30-game-second stop. This uses an existing transition.
+
+## Player controls and scheduling
+
+| State | Available player actions |
+| --- | --- |
+| Outside | Enter Station; Quit Game. Entry is disabled until a starting station is selected. |
+| In Station | Choose a trip and wait for it; Leave Station. |
+| In Station (Waiting For Trip) | Cancel waiting, restoring In Station without a selected trip. |
+| On Trip In Station | Get off at the current station. |
+| In Transit | Get Off at Next Station. |
+| In Transit (Off At Next Station) | Cancel getting off. |
+
+The provider fetches `/get_next_trips` with `station_id`, local game time in
+`HH:MM:SS`, and `day` (`weekday`, `saturday`, or `sunday`). Omitting `limit`
+requests all remaining trips. Lists reload on station entry, return from
+waiting or a trip, a new local game date, and explicit retry/refresh. The UI
+shows loading, error, and empty states. A player can still leave while loading.
+
+Choosing a trip fetches `/get_trip_stoptimes?trip_id=...` before transitioning
+to Waiting. The frontend validates the trip and boarding stop, resolves parent
+station IDs against the catalog, and checks that the trip has not left while
+loading. A failed or expired choice leaves the player In Station with feedback.
+
+The API layer converts GTFS times using the local game service date. Times
+such as `24:10:00` belong to the following calendar day and remain available in
+full journey schedules, though the station's departure list covers only the
+remaining local day. The journey layer uses exactly 30 game seconds per stop,
+moving an arrival forward if needed to keep it at or after the previous game
+departure. It retains the boarding stop's original game arrival, so late
+boarding does not restart the dwell.
+
+`advanceJourney` in `src/game-state/journey.ts` sends `BOARD_TRIP` when the
+selected train arrives, `DEPART_STATION` when its dwell ends, and
+`ARRIVE_AT_STATION` at the next stop. It applies all reached events in order
+when a fast clock tick passes several stops. Requested exits disembark on
+arrival; otherwise the player stays aboard until choosing to get off or
+reaching the terminal. The provider observes the existing shared clock and
+does not create another animation loop.
+
+Quit Game is available Outside and unmounts the active clock, wallet, and FSM.
+Start New Game creates a new Outside state with no selected station, a clock
+initialized to the current time at 1x, and a new random wallet. The station
+catalog remains loaded. Session reset does not add an FSM event or transition.
 
 ## Runtime API
 
@@ -122,12 +172,18 @@ stateDiagram-v2
 It exposes:
 
 - `getSnapshot()` returns a read-only snapshot containing `state` and its stored
-  fields, with the same object returned until an allowed transition or initial
-  station selection succeeds.
+  fields, with the same object returned until an allowed transition, initial
+  station selection, or station-trip data update succeeds.
 - `selectStartingStation(stationId)` initializes the station without changing
   the Outside state. It returns `true` only for a nonempty ID while Outside with
   `stationId: null`. Invalid IDs or later selections return `false` and preserve
   the snapshot. This setup action adds no FSM event or transition.
+- `refreshStationTrips(stationId, trips)` replaces only the upcoming-trip data
+  while In Station at that exact station. It validates the ID and trip records,
+  copies and freezes accepted data, and returns `true` with a new snapshot.
+  Wrong-state, wrong-station, or malformed updates return `false` and preserve
+  snapshot identity. This guard prevents a late station response from changing
+  the player's location or a different state's data; it adds no transition.
 - `send(event)` returns `true` and updates the model synchronously for an allowed
   transition with valid information. It returns `false` for an invalid event or
   payload, preserving the existing state and snapshot. Consecutive calls always
@@ -135,8 +191,9 @@ It exposes:
 
 `getGameStateInfo(snapshot, gameTimeMs)` derives the upcoming-trips view and
 stopped-train countdown without changing the model snapshot. `gameTimeMs` and
-event timestamps are absolute epoch milliseconds; no time-of-day parsing or
-service-date scheduling is performed.
+event timestamps are absolute epoch milliseconds. Time-of-day parsing and
+service-date scheduling live in the API and journey layers, outside this pure
+model.
 
 ### Event payloads
 
@@ -171,8 +228,11 @@ exact uppercase names in the transition table.
 `initialStationId` prop. `useGameState()` from `src/game-state/context` exposes
 the state-specific information above plus `send` and `selectStartingStation`.
 The provider belongs inside
-`GameClockProvider`, since the hook uses the shared game clock for its derived
-information. See the [README example](../README.md#game-state-machine) for usage.
+`GameClockProvider` and `StationCatalogProvider`, since the hook and scheduler
+use the shared clock and station catalog. `useGameControls()` from
+`src/game-state/controls-context` exposes the UI actions, trip-loading status,
+and active journey. See the [README example](../README.md#shared-state-and-controls)
+for usage.
 The Player state card displays the current label and fields between the wallet
 and clock, with **Not selected** for the app's initial `stationId: null`.
 At startup, a picker fetches available station IDs from the backend's
@@ -182,10 +242,9 @@ Confirming a choice calls `selectStartingStation`,
 updates the Player state card, and dismisses the picker. Supplying an
 `initialStationId` skips the picker.
 
-There is no direct state setter or reset event. Reloading or remounting the
-provider creates a fresh machine in **Outside**. The current UI has no
-transition controls, and no automatic events are emitted, so it remains in
-**Outside** until another component calls `send()`.
+There is no direct state setter or reset event. Reloading, or choosing Start
+New Game after quitting, remounts the provider and creates a fresh machine in
+**Outside**. Player controls and scheduled events both use the documented graph.
 
 ## Validation scenarios
 
@@ -216,15 +275,24 @@ transition controls, and no automatic events are emitted, so it remains in
     without mutating their source list.
 12. **Dwell time:** begin at 30 game seconds, account for boarding partway
     through a stop, clamp to zero after departure time, and derive progression
-    from the shared clock without emitting automatic transitions.
+    from the shared clock. The pure model does not emit events; the journey
+    layer sends the scheduled transition when the dwell ends.
+13. **Journey progression:** board at arrival, depart after 30 game seconds,
+    arrive at each next stop, handle several events within one clock tick,
+    and automatically get off at the terminal.
+14. **Trip requests and service dates:** use the local game date's service day,
+    safely encode IDs, reject malformed schedules, preserve stops beyond
+    midnight, and surface network failures or expired selections.
+15. **Guarded refresh:** accept new trip data only for the current In Station
+    station; reject stale or invalid updates without changing the snapshot.
+16. **New session:** quit Outside, start again, choose a new station, and
+    verify the clock, random wallet, and FSM are fresh while the catalog remains.
 
 ## Scope
 
-The runtime model, shared provider/hook, and state-information display implement
-this definition. The initial station list is fetched from the backend; other
-information is supplied through the frontend API. Trip lookups, transition
-controls, fares and wallet deductions, and automatic
-scheduling remain for later work. The FSM does not run a separate animation
-loop. Clock ticks and speed changes update derived information but do not
-trigger transitions. Wallet payments do not trigger transitions, and
-transitions do not change the clock or wallet.
+The frontend implements the runtime model, state information, player controls,
+station and trip lookups, and automatic schedule progression. It consumes the
+existing backend API without backend changes. The pure FSM remains event-driven;
+the provider supplies schedule events from the shared game clock. Fares and
+wallet deductions are not connected. Wallet payments do not trigger transitions,
+and ordinary state transitions do not change the clock or wallet.

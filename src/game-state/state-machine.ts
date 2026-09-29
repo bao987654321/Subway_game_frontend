@@ -182,6 +182,18 @@ export function createGameStateMachine(initialStationId: string | null = null) {
       snapshot = Object.freeze({ state: 'outside', stationId })
       return true
     },
+    refreshStationTrips(stationId: string, trips: readonly UpcomingTrip[]): boolean {
+      if (snapshot.state !== 'in_station' || !isId(stationId) ||
+        snapshot.stationId !== stationId || !Array.isArray(trips)) {
+        return false
+      }
+
+      const nextTrips = copyTrips(trips)
+      if (nextTrips === null) return false
+
+      snapshot = Object.freeze({ state: 'in_station', stationId, nextTrips })
+      return true
+    },
     send(event: GameEvent): boolean {
       const input = (typeof event === 'string' ? { type: event } : event) as GameEventPayload
       if (!input || typeof input !== 'object' || !Object.hasOwn(input, 'type')) return false

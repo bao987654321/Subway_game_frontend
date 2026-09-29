@@ -41,7 +41,7 @@ origin through CORS. Vite's proxy is not included in the static `dist/` files.
 The clock starts at your computer's current time at 1x speed and displays the
 local date and 24-hour time. Adjust the slider from 0.5x to 200x in 0.5x steps.
 Game time pauses while the page is hidden and resumes without catching up.
-Reloading starts a fresh clock.
+Reloading or starting a new game starts a fresh clock.
 
 `GameClockProvider` wraps the app and owns the animation loop. Other components
 can access the same clock through `useGameClock`:
@@ -68,7 +68,8 @@ speed. The clock uses monotonic elapsed time, independent of frame rate.
 
 Each game session starts with a random balance from $1.00 through $10.00,
 including cents. The wallet card displays the available balance. Clock ticks
-and speed changes do not affect it; reloading assigns a fresh balance.
+and speed changes do not affect it; reloading or starting a new game assigns a
+fresh balance. Station and trip controls do not charge fares.
 
 `WalletProvider` wraps the app. Game actions can read the balance and make a
 payment with `useWallet()`:
@@ -103,7 +104,57 @@ before React rerenders. The wallet has no deposits, persistence, or payment UI.
 
 The [FSM definition](docs/game-state-machine.md) describes the six player states
 and eleven allowed transitions, starting in **Outside**. The Player state card
-shows the current state and its information between the wallet and clock.
+shows the current state, its information, and the available controls between
+the wallet and clock.
+
+| State | Controls |
+| --- | --- |
+| Outside | **Enter Station** after selecting a station; **Quit Game**. |
+| In Station | Choose a trip and **Wait for this trip**; **Leave Station**. |
+| In Station (Waiting For Trip) | **Cancel waiting**, returning to In Station with no selected trip. |
+| On Trip In Station | **Get off** at the current station. |
+| In Transit | **Get Off at Next Station**. |
+| In Transit (Off At Next Station) | **Cancel getting off**, remaining aboard at the next stop. |
+
+Entering a station loads its remaining-day trips. The state fields show the
+remaining-trip count; the chooser shows each trip's arrival time, route, and
+destination. Loading, failed requests, empty results, and trips that leave
+before selection have visible feedback. The chooser offers retry or refresh
+when appropriate. **Leave Station** remains available while trips load.
+
+Selecting a trip loads its full stop schedule, then waits for its arrival.
+The shared game clock drives automatic boarding, departures after **30 game
+seconds** at each stop, and arrivals at subsequent stops. The player can get
+off while stopped or request the next stop while moving. At the terminal, the
+player automatically gets off after the final 30-second stop. Faster clock
+speeds also speed up the journey; a clock tick that passes multiple scheduled
+events applies them in order.
+
+**Quit Game** is available Outside and ends the session. **Start New Game**
+returns to station selection with a new current-time clock at 1x, a new random
+wallet, and a fresh Outside state. The loaded station catalog is retained.
+
+### Schedule API
+
+The frontend calls `GET /get_next_trips` with the selected parent `station_id`,
+the current local game `time` as `HH:MM:SS`, and `day` as `weekday`, `saturday`,
+or `sunday`. It omits `limit` to request the rest of the day. Trip lists refresh
+on station entry, cancellation back to the station, a new local game date, or
+an explicit retry/refresh. Selecting a trip calls `GET /get_trip_stoptimes`
+with its `trip_id`.
+
+Schedule times use the local game calendar date, not wall-clock time at the
+moment a request completes. GTFS times beyond `24:00:00` are supported in full
+journeys, so a selected trip can continue after midnight. The trip chooser
+is limited to the remaining local day. Journey departures use a 30-second
+dwell; if necessary, a later arrival is moved forward to avoid preceding the
+previous departure. Stop IDs resolve to the known station catalog by an exact
+match or by removing one final `N`/`S` only when the resulting parent ID exists
+in that catalog. Unsupported stops produce a visible error rather than an
+invented station. These are frontend integrations with the existing backend;
+no backend changes or fares are included.
+
+### Shared state and controls
 
 `GameStateProvider` wraps the app inside `GameClockProvider`. Its optional
 `initialStationId` prop selects the starting station; without it, Outside has
@@ -112,26 +163,21 @@ shows the current state and its information between the wallet and clock.
 accepts a nonempty ID only while Outside with an unassigned station; it returns
 `true` on success and `false` without mutation otherwise. This initialization
 action keeps the existing state and transition graph intact. Other components
-access the state-specific fields and send events through `useGameState()`. For example,
-a future station-entry control could use:
+access the state-specific fields through `useGameState()`. UI actions use
+`useGameControls()`, which coordinates schedule loading and journey progress:
 
 ```tsx
 import { useGameState } from './game-state/context'
-import { GAME_STATE_LABELS } from './game-state/state-machine'
+import { useGameControls } from './game-state/controls-context'
 
 function StationEntrance() {
-  const { state, send } = useGameState()
-
-  function enterStation() {
-    const success = send({ type: 'ENTER_STATION', stationId: '101' })
-    if (!success) {
-      // The transition or its supplied information was invalid.
-    }
-  }
+  const player = useGameState()
+  const { enterStation } = useGameControls()
+  if (player.state !== 'outside') return null
 
   return (
-    <button onClick={enterStation}>
-      Enter station — {GAME_STATE_LABELS[state]}
+    <button onClick={enterStation} disabled={player.stationId === null}>
+      Enter Station
     </button>
   )
 }
@@ -143,8 +189,10 @@ state's fields. Outside exposes `stationId`; In Station exposes `stationId` and
 `tripId`, `stopArrivalGameTimeMs`, and `remainingStopTimeMs`; In Transit exposes
 `tripId`; and In Transit (Off At Next Station) exposes `tripId` and `nextStopId`.
 
-Supply upcoming trips as `{ tripId, departureGameTimeMs }` records on station
-entry or arrival. Timestamps are absolute epoch milliseconds on the game clock.
+The model accepts upcoming trips as `{ tripId, departureGameTimeMs }` records
+on station entry, arrival, or a guarded station-data refresh. The provider
+loads those records and uses each arrival plus 30 seconds as the game departure.
+Timestamps are absolute epoch milliseconds on the game clock.
 The hook shows only departures from the current game time through the end of
 the local game day, sorted by departure time. The stopped-train countdown uses
 30 game seconds from the supplied stop arrival time, so boarding late does not
@@ -161,13 +209,13 @@ the complete payload contract. State changes must follow the documented graph;
 there is no direct setter or reset event. Reloading or remounting the provider
 starts again in **Outside**.
 
-The current UI lets the player choose a starting station and displays supplied
-and derived state information. It has no
-transition buttons or automatic events, so it stays **Outside** until a
-component sends an event. Clock ticks update the countdown and upcoming-trips
-view but do not trigger transitions, even when the countdown reaches zero.
-Wallet payments do not trigger transitions. Trip lookups, automatic scheduling,
-and fares are not connected yet.
+The pure FSM remains event-driven and does not run its own timer. The provider's
+scheduling layer observes the shared clock and sends the appropriate boarding,
+departure, arrival, and terminal disembarkation events. Its
+`refreshStationTrips(stationId, trips)` model method updates only trip data when
+the player is In Station at that same station; invalid or stale-station updates
+are rejected without mutation. It does not add a state transition or reset the
+player's location. Wallet payments do not trigger transitions.
 
 ## Checks and production build
 
