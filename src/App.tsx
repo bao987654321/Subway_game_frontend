@@ -2,6 +2,7 @@ import { GameClock } from './components/GameClock'
 import { Wallet } from './components/Wallet'
 import { PlayerState } from './components/PlayerState'
 import { StationEntry } from './components/StationEntry'
+import { Busking } from './components/Busking'
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
         <Wallet />
         <PlayerState />
         <StationEntry />
+        <Busking />
         <GameClock />
       </div>
     </main>

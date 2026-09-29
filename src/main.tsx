@@ -7,6 +7,7 @@ import { WalletProvider } from './wallet/WalletProvider'
 import { GameStateProvider } from './game-state/GameStateProvider'
 import { GameOverWatcher } from './game-state/GameOverWatcher'
 import { FareProvider } from './fare/FareProvider'
+import { BuskingProvider } from './busking/BuskingProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -16,7 +17,9 @@ createRoot(document.getElementById('root')!).render(
         <WalletProvider>
           <FareProvider>
             <GameOverWatcher />
-            <App />
+            <BuskingProvider>
+              <App />
+            </BuskingProvider>
           </FareProvider>
         </WalletProvider>
       </GameStateProvider>

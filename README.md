@@ -96,6 +96,23 @@ which moves the game to the terminal **Game Over** state. The rules live in
 `useStationEntry()` connect them to the wallet and game state. The app starts at
 a placeholder station (`101`) until station selection exists.
 
+## Busking
+
+While the player is **In Station (Waiting For Trip)**, they busk to earn money.
+The wait is split by game time: one minute to set up, whole minutes of busking,
+then one minute to pack up. A trip departing in 5 game minutes gives 3 minutes
+of busking. Each completed busking minute pays a random amount from $0.25 to
+$5.00. Amounts follow a geometric distribution truncated at $5.00, so most
+minutes pay little and a few pay a lot; the mean is about $1.39. Minutes are
+game minutes, so clock speed changes how fast a wait pays out. Cancelling the
+wait keeps what was already earned, and waiting again starts a new setup.
+
+`BuskingProvider` pays out through `earn_money` and `useBusking()` exposes the
+phase and progress (`null` when not waiting) for the Busking card. The rules
+live in `src/busking/busking.ts`. Nothing yet lets the player wait for a trip,
+because trips are not supplied to the game, so the Busking card stays hidden
+until a component sends `WAIT_FOR_TRIP`.
+
 ## Game state machine
 
 The [FSM definition](docs/game-state-machine.md) describes the seven player states
@@ -132,7 +149,8 @@ function StationEntrance() {
 
 The hook returns a discriminated union: check `state` before reading that
 state's fields. Outside exposes `stationId`; In Station exposes `stationId` and
-`nextTrips`; Waiting exposes `stationId` and `tripId`; On Trip In Station exposes
+`nextTrips`; Waiting exposes `stationId`, `tripId`, and `departureGameTimeMs`
+(looked up from the supplied trips; waiting for an unknown trip is rejected); On Trip In Station exposes
 `tripId`, `stopArrivalGameTimeMs`, and `remainingStopTimeMs`; In Transit exposes
 `tripId`; and In Transit (Off At Next Station) exposes `tripId` and `nextStopId`.
 
@@ -158,8 +176,7 @@ The current UI displays supplied and derived state information. Its only
 transition controls are the station entrance buttons, so the player stays
 **Outside** until they use one. Clock ticks update the countdown and
 upcoming-trips view but do not trigger transitions, even when the countdown
-reaches zero. Backend lookups, automatic scheduling, and busking are not
-connected yet.
+reaches zero. Backend lookups and automatic scheduling are not connected yet.
 
 ## Checks and production build
 

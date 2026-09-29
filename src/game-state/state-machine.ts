@@ -36,7 +36,13 @@ export type GameStateSnapshot =
       stationId: string
       nextTrips: readonly UpcomingTrip[]
     }>
-  | Readonly<{ state: 'waiting_for_trip'; stationId: string; tripId: string }>
+  | Readonly<{
+      state: 'waiting_for_trip'
+      stationId: string
+      tripId: string
+      /** Absolute departure timestamp in game-time epoch milliseconds. */
+      departureGameTimeMs: number
+    }>
   | Readonly<{
       state: 'on_trip_in_station'
       tripId: string
@@ -207,15 +213,20 @@ export function createGameStateMachine(initialStationId: string | null = null) {
           if (snapshot.state !== 'in_station') return false
           nextSnapshot = { state: 'outside', stationId: snapshot.stationId }
           break
-        case 'WAIT_FOR_TRIP':
+        case 'WAIT_FOR_TRIP': {
           if (snapshot.state !== 'in_station' || !isId(input.tripId)) return false
+          // The departure comes from the supplied list, so the two can't disagree.
+          const trip = snapshot.nextTrips.find((candidate) => candidate.tripId === input.tripId)
+          if (!trip) return false
           nextSnapshot = {
             state: 'waiting_for_trip',
             stationId: snapshot.stationId,
-            tripId: input.tripId,
+            tripId: trip.tripId,
+            departureGameTimeMs: trip.departureGameTimeMs,
           }
           waitingTrips = snapshot.nextTrips
           break
+        }
         case 'CANCEL_WAIT':
           if (snapshot.state !== 'waiting_for_trip') return false
           nextSnapshot = {

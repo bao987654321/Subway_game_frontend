@@ -144,7 +144,9 @@ test('consecutive journey events propagate only the fields belonging to each sta
   const machine = createMachineAt('in_station')
   assert.deepEqual(machine.getSnapshot(), { state: 'in_station', stationId: '101', nextTrips })
   assert.equal(machine.send(eventFixtures.WAIT_FOR_TRIP), true)
-  assert.deepEqual(machine.getSnapshot(), { state: 'waiting_for_trip', stationId: '101', tripId: 'trip-1' })
+  assert.deepEqual(machine.getSnapshot(), {
+    state: 'waiting_for_trip', stationId: '101', tripId: 'trip-1', departureGameTimeMs: now + 60_000,
+  })
   assert.equal(machine.send(eventFixtures.BOARD_TRIP), true)
   assert.deepEqual(machine.getSnapshot(), {
     state: 'on_trip_in_station', tripId: 'trip-1', stopArrivalGameTimeMs: now,
@@ -188,6 +190,15 @@ test('remaining aboard retains the trip and replaces arrival timing at every sto
       state: 'on_trip_in_station', tripId: 'trip-1', stopArrivalGameTimeMs: arrival,
     })
   }
+})
+
+test('waiting takes the departure from the supplied trip and rejects unknown trips', () => {
+  const machine = createMachineAt('in_station')
+  assertRejected(machine, { type: 'WAIT_FOR_TRIP', tripId: 'no-such-trip' })
+  assert.equal(machine.send({ type: 'WAIT_FOR_TRIP', tripId: 'trip-2' }), true)
+  assert.deepEqual(machine.getSnapshot(), {
+    state: 'waiting_for_trip', stationId: '101', tripId: 'trip-2', departureGameTimeMs: now + 120_000,
+  })
 })
 
 test('cancelling waiting restores the original station and full departures', () => {
@@ -287,7 +298,7 @@ test('snapshots and copied departures are immutable without freezing caller data
   assert.deepEqual(inStation.nextTrips, [{ tripId: 'original', departureGameTimeMs: now }])
   assert.throws(() => { inStation.nextTrips[0].tripId = 'changed' }, TypeError)
   assert.throws(() => { inStation.nextTrips.push({ tripId: 'x', departureGameTimeMs: now }) }, TypeError)
-  assert.equal(machine.send(eventFixtures.WAIT_FOR_TRIP), true)
+  assert.equal(machine.send({ type: 'WAIT_FOR_TRIP', tripId: 'original' }), true)
   assert.equal(machine.send('CANCEL_WAIT'), true)
   assert.deepEqual(machine.getSnapshot(), inStation)
   assert.deepEqual(initial, { state: 'outside', stationId: '101' })
@@ -344,7 +355,9 @@ test('independently created games do not share station or trip data', () => {
   assert.equal(first.send(eventFixtures.WAIT_FOR_TRIP), true)
   assert.equal(second.getSnapshot(), secondInitial)
   assert.equal(second.send('ENTER_STATION'), true)
-  assert.deepEqual(first.getSnapshot(), { state: 'waiting_for_trip', stationId: '101', tripId: 'trip-1' })
+  assert.deepEqual(first.getSnapshot(), {
+    state: 'waiting_for_trip', stationId: '101', tripId: 'trip-1', departureGameTimeMs: now + 60_000,
+  })
   assert.deepEqual(second.getSnapshot(), { state: 'in_station', stationId: '201', nextTrips: [] })
 })
 

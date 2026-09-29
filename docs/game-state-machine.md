@@ -26,7 +26,7 @@ state. “On Trip” and “On Trip (Off At Next Station)” refer to the existi
 | --- | --- |
 | Outside | `stationId: string \| null`; `null` means no station has been selected. |
 | In Station | `stationId: string`; `nextTrips: { tripId: string; departureGameTimeMs: number }[]`. |
-| In Station (Waiting For Trip) | `tripId: string`; retained `stationId: string` for cancellation. |
+| In Station (Waiting For Trip) | `tripId: string`; `departureGameTimeMs: number`; retained `stationId: string` for cancellation. |
 | On Trip In Station | `tripId: string`; `stopArrivalGameTimeMs: number`; derived `remainingStopTimeMs: number`. |
 | In Transit (Off At Next Station) | `tripId: string`; `nextStopId: string`. |
 | In Transit | `tripId: string`. |
@@ -155,7 +155,7 @@ Events carrying information use `{ type, ...payload }` objects:
 | --- | --- |
 | `ENTER_STATION` | Optional `stationId` and `nextTrips`. Uses the current Outside station when `stationId` is omitted; rejects entry if no station is selected. Omitted `nextTrips` defaults to an empty list. |
 | `LEAVE_STATION` | No payload. Carries the current station ID into Outside. |
-| `WAIT_FOR_TRIP` | Required `tripId`. Retains the current station and its supplied trips for cancellation. |
+| `WAIT_FOR_TRIP` | Required `tripId`, which must be one of the station's supplied trips (an unknown trip is rejected). The trip's departure time becomes `departureGameTimeMs`. Retains the current station and its supplied trips for cancellation. |
 | `CANCEL_WAIT` | No payload. Restores the station and its supplied trip list; the hook filters that list against the current game time. |
 | `BOARD_TRIP` | Required `stopArrivalGameTimeMs`. Carries the selected trip into On Trip In Station. |
 | `GET_OFF_TRIP` | Required `stationId`; optional `nextTrips`, defaulting to an empty list. Returns to the supplied parent station. |
@@ -228,8 +228,9 @@ remains in **Outside** until one of those happens.
 
 The runtime model, shared provider/hook, and state-information display implement
 this definition. Information is supplied through the frontend API; backend
-lookups, the remaining transition controls, busking, and automatic scheduling
-remain for later work. Entering the station costs a fare or risks a fine, but
+lookups, the remaining transition controls, and automatic scheduling remain for
+later work. Busking while waiting (`src/busking/`) earns money from the shared
+clock without sending any events. Entering the station costs a fare or risks a fine, but
 that logic lives outside the FSM (`src/fare/`), which only receives
 `ENTER_STATION`. The FSM does not run a separate animation loop. Clock ticks
 and speed changes update derived information but do not trigger transitions.

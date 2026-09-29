@@ -56,6 +56,14 @@ function PlayerStateDetails({ info }: { info: ReturnType<typeof useGameState> })
             <dt>Waiting for trip</dt>
             <dd>{info.tripId}</dd>
           </div>
+          <div>
+            <dt>Departs</dt>
+            <dd>
+              <time dateTime={new Date(info.departureGameTimeMs).toISOString()}>
+                {departureTimeFormatter.format(info.departureGameTimeMs)}
+              </time>
+            </dd>
+          </div>
         </>
       )
     case 'on_trip_in_station':
