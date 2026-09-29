@@ -14,6 +14,28 @@ npm run dev
 
 Open http://127.0.0.1:5173.
 
+## Starting station
+
+On each page load, the starting-station picker requests `GET /all_stations`
+from the [backend API](https://subway-game-backend.rcdis.co/docs). This endpoint
+returns station IDs, ordered by station name. The frontend resolves names and
+lines using `/all_routes` and `/get_route_stations`, with `/get_station` as a
+fallback for any missing station. Requests run in bounded batches. The picker
+shows station names, lines, and IDs in the original order; IDs distinguish
+stations sharing a name. Choose one and press **Start at this station** to set the shared
+`stationId` while remaining **Outside**. The picker then disappears. Reloading
+starts a fresh selection. Loading, empty lists, and request failures have visible
+feedback, with a Retry button for empty lists or failures. The shared station
+catalog remains available after selection, so the Player state card displays the
+station name alongside its ID. The FSM continues to store station IDs.
+
+Vite development and preview servers proxy `/api/*` requests to
+`https://subway-game-backend.rcdis.co/*`, so the browser does not need cross-origin
+access to that server. For a deployed production build, configure the host to
+reverse-proxy `/api/*` to that backend with the `/api` prefix removed. Alternatively,
+set `VITE_API_BASE_URL` at build time to an API URL that allows the frontend's
+origin through CORS. Vite's proxy is not included in the static `dist/` files.
+
 ## Game clock
 
 The clock starts at your computer's current time at 1x speed and displays the
@@ -85,8 +107,12 @@ shows the current state and its information between the wallet and clock.
 
 `GameStateProvider` wraps the app inside `GameClockProvider`. Its optional
 `initialStationId` prop selects the starting station; without it, Outside has
-`stationId: null` and the card shows **Not selected**. Other components access
-the state-specific fields and send events through `useGameState()`. For example,
+`stationId: null` and the picker lets the player choose. The card shows
+**Not selected** until then. `useGameState().selectStartingStation(stationId)`
+accepts a nonempty ID only while Outside with an unassigned station; it returns
+`true` on success and `false` without mutation otherwise. This initialization
+action keeps the existing state and transition graph intact. Other components
+access the state-specific fields and send events through `useGameState()`. For example,
 a future station-entry control could use:
 
 ```tsx
@@ -135,12 +161,13 @@ the complete payload contract. State changes must follow the documented graph;
 there is no direct setter or reset event. Reloading or remounting the provider
 starts again in **Outside**.
 
-The current UI displays supplied and derived state information. It has no
+The current UI lets the player choose a starting station and displays supplied
+and derived state information. It has no
 transition buttons or automatic events, so it stays **Outside** until a
 component sends an event. Clock ticks update the countdown and upcoming-trips
 view but do not trigger transitions, even when the countdown reaches zero.
-Wallet payments do not trigger transitions. Backend lookups, automatic
-scheduling, and fares are not connected yet.
+Wallet payments do not trigger transitions. Trip lookups, automatic scheduling,
+and fares are not connected yet.
 
 ## Checks and production build
 
@@ -152,5 +179,3 @@ npm run preview
 ```
 
 The production build is written to `dist/`. Preview serves that build locally.
-
-Backend integration is not included yet.

@@ -6,6 +6,8 @@ import type { GameEvent, GameStateInfo, GameStateSnapshot } from './state-machin
 interface GameStateActions {
   /** Apply an allowed event; false leaves the state unchanged. */
   send: (event: GameEvent) => boolean
+  /** Choose the initial station while outside; false leaves the state unchanged. */
+  selectStartingStation: (stationId: string) => boolean
 }
 
 export type GameStateContextValue = GameStateInfo & GameStateActions
@@ -20,5 +22,9 @@ export function useGameState(): GameStateContextValue {
     throw new Error('useGameState must be used within GameStateProvider.')
   }
 
-  return { ...getGameStateInfo(gameState, gameTimeMs), send: gameState.send }
+  return {
+    ...getGameStateInfo(gameState, gameTimeMs),
+    send: gameState.send,
+    selectStartingStation: gameState.selectStartingStation,
+  }
 }

@@ -122,7 +122,12 @@ stateDiagram-v2
 It exposes:
 
 - `getSnapshot()` returns a read-only snapshot containing `state` and its stored
-  fields, with the same object returned until an allowed transition succeeds.
+  fields, with the same object returned until an allowed transition or initial
+  station selection succeeds.
+- `selectStartingStation(stationId)` initializes the station without changing
+  the Outside state. It returns `true` only for a nonempty ID while Outside with
+  `stationId: null`. Invalid IDs or later selections return `false` and preserve
+  the snapshot. This setup action adds no FSM event or transition.
 - `send(event)` returns `true` and updates the model synchronously for an allowed
   transition with valid information. It returns `false` for an invalid event or
   payload, preserving the existing state and snapshot. Consecutive calls always
@@ -164,11 +169,18 @@ exact uppercase names in the transition table.
 
 `GameStateProvider` owns the app's shared machine and accepts an optional
 `initialStationId` prop. `useGameState()` from `src/game-state/context` exposes
-the state-specific information above plus `send`. The provider belongs inside
+the state-specific information above plus `send` and `selectStartingStation`.
+The provider belongs inside
 `GameClockProvider`, since the hook uses the shared game clock for its derived
 information. See the [README example](../README.md#game-state-machine) for usage.
 The Player state card displays the current label and fields between the wallet
 and clock, with **Not selected** for the app's initial `stationId: null`.
+At startup, a picker fetches available station IDs from the backend's
+`/all_stations` endpoint and resolves their names through the station catalog.
+The picker and Player state card display names; the FSM keeps only station IDs.
+Confirming a choice calls `selectStartingStation`,
+updates the Player state card, and dismisses the picker. Supplying an
+`initialStationId` skips the picker.
 
 There is no direct state setter or reset event. Reloading or remounting the
 provider creates a fresh machine in **Outside**. The current UI has no
@@ -209,8 +221,9 @@ transition controls, and no automatic events are emitted, so it remains in
 ## Scope
 
 The runtime model, shared provider/hook, and state-information display implement
-this definition. Information is supplied through the frontend API; backend
-lookups, transition controls, fares and wallet deductions, and automatic
+this definition. The initial station list is fetched from the backend; other
+information is supplied through the frontend API. Trip lookups, transition
+controls, fares and wallet deductions, and automatic
 scheduling remain for later work. The FSM does not run a separate animation
 loop. Clock ticks and speed changes update derived information but do not
 trigger transitions. Wallet payments do not trigger transitions, and

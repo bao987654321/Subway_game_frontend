@@ -174,6 +174,14 @@ export function createGameStateMachine(initialStationId: string | null = null) {
 
   return {
     getSnapshot: () => snapshot,
+    selectStartingStation(stationId: string): boolean {
+      if (snapshot.state !== 'outside' || snapshot.stationId !== null || !isId(stationId)) {
+        return false
+      }
+
+      snapshot = Object.freeze({ state: 'outside', stationId })
+      return true
+    },
     send(event: GameEvent): boolean {
       const input = (typeof event === 'string' ? { type: event } : event) as GameEventPayload
       if (!input || typeof input !== 'object' || !Object.hasOwn(input, 'type')) return false

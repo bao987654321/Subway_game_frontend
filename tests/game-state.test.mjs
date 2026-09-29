@@ -80,6 +80,56 @@ test('starts outside with an optional station and the agreed labels', () => {
   }
 })
 
+test('choosing a starting station stays outside and is available to the next event', () => {
+  const machine = createGameStateMachine()
+  const initial = machine.getSnapshot()
+
+  assert.equal(machine.selectStartingStation('101'), true)
+  const selected = machine.getSnapshot()
+  assert.deepEqual(selected, { state: 'outside', stationId: '101' })
+  assert.notEqual(selected, initial)
+  assert.equal(Object.isFrozen(selected), true)
+  assert.deepEqual(initial, { state: 'outside', stationId: null })
+
+  assert.equal(machine.send('ENTER_STATION'), true)
+  assert.deepEqual(machine.getSnapshot(), { state: 'in_station', stationId: '101', nextTrips: [] })
+})
+
+test('invalid starting stations preserve the unassigned state and allow retry', () => {
+  const machine = createGameStateMachine()
+  const initial = machine.getSnapshot()
+
+  for (const stationId of ['', '   ', '\n\t', null, undefined, 101, {}]) {
+    assert.equal(machine.selectStartingStation(stationId), false)
+    assert.equal(machine.getSnapshot(), initial)
+  }
+
+  assert.equal(machine.selectStartingStation('201'), true)
+  assert.deepEqual(machine.getSnapshot(), { state: 'outside', stationId: '201' })
+})
+
+test('starting station selection cannot replace a station or change an active journey', () => {
+  const selected = createGameStateMachine()
+  assert.equal(selected.selectStartingStation('101'), true)
+  const initialSelection = selected.getSnapshot()
+  assert.equal(selected.selectStartingStation('101'), false)
+  assert.equal(selected.selectStartingStation('201'), false)
+  assert.equal(selected.getSnapshot(), initialSelection)
+
+  for (const state of Object.keys(expectedTransitions)) {
+    const machine = createMachineAt(state)
+    const before = machine.getSnapshot()
+    assert.equal(machine.selectStartingStation('201'), false, state)
+    assert.equal(machine.getSnapshot(), before)
+  }
+
+  assert.equal(selected.send('ENTER_STATION'), true)
+  assert.equal(selected.send('LEAVE_STATION'), true)
+  const returnedOutside = selected.getSnapshot()
+  assert.equal(selected.selectStartingStation('201'), false)
+  assert.equal(selected.getSnapshot(), returnedOutside)
+})
+
 // Covers all 60 combinations: 11 accepted transitions and 49 rejections.
 for (const [state, transitions] of Object.entries(expectedTransitions)) {
   for (const [name, event] of Object.entries(eventFixtures)) {

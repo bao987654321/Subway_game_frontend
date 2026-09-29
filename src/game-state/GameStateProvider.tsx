@@ -24,8 +24,17 @@ export function GameStateProvider({
     [machine],
   )
 
+  const selectStartingStation = useCallback(
+    (stationId: string): boolean => {
+      const success = machine.selectStartingStation(stationId)
+      if (success) setSnapshot(machine.getSnapshot())
+      return success
+    },
+    [machine],
+  )
+
   return (
-    <GameStateContext.Provider value={{ ...snapshot, send }}>
+    <GameStateContext.Provider value={{ ...snapshot, send, selectStartingStation }}>
       {children}
     </GameStateContext.Provider>
   )

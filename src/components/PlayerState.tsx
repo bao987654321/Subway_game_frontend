@@ -1,5 +1,6 @@
 import { useGameState } from '../game-state/context'
 import { GAME_STATE_LABELS } from '../game-state/state-machine'
+import { useStationCatalog } from '../stations/context'
 
 const departureTimeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: '2-digit',
@@ -8,22 +9,33 @@ const departureTimeFormatter = new Intl.DateTimeFormat(undefined, {
   hourCycle: 'h23',
 })
 
+function StationField({ stationId }: { stationId: string | null }) {
+  const { byId } = useStationCatalog()
+  const station = stationId === null ? undefined : byId.get(stationId)
+
+  return (
+    <div>
+      <dt>{station ? 'Station' : 'Station ID'}</dt>
+      <dd>
+        {station ? (
+          <>
+            <span>{station.name}</span>
+            <span className="player-station-id">ID {station.id}</span>
+          </>
+        ) : stationId ?? 'Not selected'}
+      </dd>
+    </div>
+  )
+}
+
 function PlayerStateDetails({ info }: { info: ReturnType<typeof useGameState> }) {
   switch (info.state) {
     case 'outside':
-      return (
-        <div>
-          <dt>Station ID</dt>
-          <dd>{info.stationId ?? 'Not selected'}</dd>
-        </div>
-      )
+      return <StationField stationId={info.stationId} />
     case 'in_station':
       return (
         <>
-          <div>
-            <dt>Station ID</dt>
-            <dd>{info.stationId}</dd>
-          </div>
+          <StationField stationId={info.stationId} />
           <div>
             <dt>Trips remaining today</dt>
             <dd>
@@ -48,10 +60,7 @@ function PlayerStateDetails({ info }: { info: ReturnType<typeof useGameState> })
     case 'waiting_for_trip':
       return (
         <>
-          <div>
-            <dt>Station ID</dt>
-            <dd>{info.stationId}</dd>
-          </div>
+          <StationField stationId={info.stationId} />
           <div>
             <dt>Waiting for trip</dt>
             <dd>{info.tripId}</dd>
