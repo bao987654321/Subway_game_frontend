@@ -9,8 +9,8 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
 })
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
-  weekday: 'long',
-  month: 'long',
+  weekday: 'short',
+  month: 'short',
   day: 'numeric',
   year: 'numeric',
 })
@@ -21,16 +21,17 @@ export function GameClock() {
   return (
     <section className="clock-card" aria-labelledby="clock-title">
       <header className="clock-header">
-        <h1 id="clock-title">Game time</h1>
-        <span className="clock-timezone">Local time</span>
+        <div>
+          <h1 id="clock-title">Game time</h1>
+          <p className="clock-date">{dateFormatter.format(gameTimeMs)}</p>
+        </div>
+        <div className="clock-display">
+          <time className="clock-time" dateTime={new Date(gameTimeMs).toISOString()}>
+            {timeFormatter.format(gameTimeMs)}
+          </time>
+          <span className="clock-timezone">Local time</span>
+        </div>
       </header>
-
-      <div className="clock-display">
-        <time className="clock-time" dateTime={new Date(gameTimeMs).toISOString()}>
-          {timeFormatter.format(gameTimeMs)}
-        </time>
-        <p className="clock-date">{dateFormatter.format(gameTimeMs)}</p>
-      </div>
 
       <div className="speed-control">
         <div className="speed-label">

@@ -136,12 +136,15 @@ wallet, and a fresh Outside state. The loaded station catalog is retained.
 
 ### Route progress
 
-The Route progress card between Player state and the clock shows the selected
+The Route progress card below Player state shows the selected
 line and destination, the current station or travel segment, and the next
 station's arrival countdown in game time. While waiting it counts down to the
 train's arrival; while stopped it counts down to departure. The terminal is
-identified as the final stop. Expand the remaining stops to see the rest of
-the journey. Without an active journey, the card prompts the player to choose
+identified as the final stop. A horizontal diagram shows every stop on the
+selected trip, including stops before boarding. It marks past, current, and next
+stops, with a moving position marker during travel. Scroll sideways or use
+Start, Your position, and End to explore; the view centers on each new stop.
+Without an active journey, the card prompts the player to choose
 a trip. It reads the existing journey, shared clock, and station catalog, so
 it makes no additional API requests.
 
