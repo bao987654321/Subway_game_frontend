@@ -70,17 +70,36 @@ function BuyTicket() {
 }
 ```
 
-Both `balance` and `pay_money(amount)` use dollars. Money is stored internally
-as integer cents. A successful payment immediately deducts the amount and
-returns `true`; paying the exact balance is allowed. Insufficient funds or an
-invalid amount (nonfinite, nonpositive, or fractional-cent) returns `false`
-without changing the balance. Consecutive calls use the latest balance, even
-before React rerenders. The wallet has no deposits, persistence, or payment UI.
+`balance`, `pay_money(amount)`, `earn_money(amount)`, and `fine(amount)` use
+dollars. Money is stored internally as integer cents. A successful payment
+immediately deducts the amount and returns `true`; paying the exact balance is
+allowed. Insufficient funds or an invalid amount (nonfinite, nonpositive, or
+fractional-cent) returns `false` without changing the balance. `earn_money`
+adds to the balance. `fine` deducts like a payment but may leave the balance
+negative; that is the only way to go below zero. Consecutive calls use the
+latest balance, even before React rerenders. The wallet has no persistence.
+
+## Entering the station
+
+The Station entrance card offers two ways in from **Outside**:
+
+- **Pay fare ($3.00):** deducts the fare and enters the station. Disabled when
+  the balance is under $3.00.
+- **Jump turnstile:** free, but each jump has a 1% chance of getting caught.
+  Being caught leaves the player outside, who may try again. Fines escalate with
+  each time caught: a warning (no fine), then $50, then $150 for the third and
+  every later offense. Offenses count only times caught, not attempts.
+
+A fine can leave the balance negative. `GameOverWatcher` then sends `GAME_OVER`,
+which moves the game to the terminal **Game Over** state. The rules live in
+`src/fare/fare.ts` and `src/fare/station-entry.ts`; `FareProvider` and
+`useStationEntry()` connect them to the wallet and game state. The app starts at
+a placeholder station (`101`) until station selection exists.
 
 ## Game state machine
 
-The [FSM definition](docs/game-state-machine.md) describes the six player states
-and eleven allowed transitions, starting in **Outside**. The Player state card
+The [FSM definition](docs/game-state-machine.md) describes the seven player states
+and seventeen allowed transitions, starting in **Outside**. The Player state card
 shows the current state and its information between the wallet and clock.
 
 `GameStateProvider` wraps the app inside `GameClockProvider`. Its optional
@@ -135,12 +154,12 @@ the complete payload contract. State changes must follow the documented graph;
 there is no direct setter or reset event. Reloading or remounting the provider
 starts again in **Outside**.
 
-The current UI displays supplied and derived state information. It has no
-transition buttons or automatic events, so it stays **Outside** until a
-component sends an event. Clock ticks update the countdown and upcoming-trips
-view but do not trigger transitions, even when the countdown reaches zero.
-Wallet payments do not trigger transitions. Backend lookups, automatic
-scheduling, and fares are not connected yet.
+The current UI displays supplied and derived state information. Its only
+transition controls are the station entrance buttons, so the player stays
+**Outside** until they use one. Clock ticks update the countdown and
+upcoming-trips view but do not trigger transitions, even when the countdown
+reaches zero. Backend lookups, automatic scheduling, and busking are not
+connected yet.
 
 ## Checks and production build
 

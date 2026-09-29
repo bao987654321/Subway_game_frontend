@@ -91,6 +91,13 @@ function PlayerStateDetails({ info }: { info: ReturnType<typeof useGameState> })
           <dd>{info.tripId}</dd>
         </div>
       )
+    case 'game_over':
+      return (
+        <div>
+          <dt>Status</dt>
+          <dd>The game has ended.</dd>
+        </div>
+      )
   }
 }
 

@@ -32,7 +32,8 @@ main {
 
 .clock-card,
 .wallet-card,
-.player-state-card {
+.player-state-card,
+.station-entry-card {
   width: 100%;
   max-width: 34rem;
   padding: clamp(1.5rem, 5vw, 2.5rem);
@@ -51,7 +52,8 @@ main {
 }
 
 .wallet-card,
-.player-state-card {
+.player-state-card,
+.station-entry-card {
   padding-block: 1.5rem;
 }
 
@@ -60,7 +62,8 @@ main {
 }
 
 .wallet-card h2,
-.player-state-card h2 {
+.player-state-card h2,
+.station-entry-card h2 {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
@@ -134,6 +137,49 @@ main {
 .player-state-trips time {
   color: #667085;
   font-size: 0.8125rem;
+}
+
+.station-entry-card h2 {
+  margin-bottom: 1rem;
+}
+
+.station-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.station-entry-actions button {
+  flex: 1 1 10rem;
+  padding: 0.625rem 1rem;
+  border: 1px solid #2563eb;
+  border-radius: 0.75rem;
+  background: #2563eb;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.station-entry-actions button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.station-entry-actions button:disabled {
+  border-color: #e2e6ec;
+  background: #f0f4f8;
+  color: #98a2b3;
+  cursor: not-allowed;
+}
+
+.station-entry-message {
+  min-height: 1.5rem;
+  margin: 1rem 0 0;
+  color: #344054;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .clock-header,
@@ -232,7 +278,8 @@ input[type='range']:focus-visible {
 
   .clock-card,
   .wallet-card,
-  .player-state-card {
+  .player-state-card,
+  .station-entry-card {
     padding: 1.25rem;
   }
 }

@@ -1,8 +1,8 @@
 # Game State Machine
 
 This is the agreed definition of the player's finite state machine (FSM),
-implemented by the shared frontend game state model. It has **six states**,
-**ten events**, **eleven allowed transitions**, and starts in **Outside**.
+implemented by the shared frontend game state model. It has **seven states**,
+**eleven events**, **seventeen allowed transitions**, and starts in **Outside**.
 
 ## States
 
@@ -14,6 +14,7 @@ implemented by the shared frontend game state model. It has **six states**,
 | On Trip In Station | The player is aboard a train stopped at a station. |
 | In Transit | The player is aboard a moving train and plans to stay aboard at the next stop. |
 | In Transit (Off At Next Station) | The player is aboard a moving train and has requested to get off at the next station. |
+| Game Over | The game has ended, for example after a fine leaves the balance negative. Terminal: no event leaves it. |
 
 “On Train In Station” refers to **On Trip In Station**; it is not an additional
 state. “On Trip” and “On Trip (Off At Next Station)” refer to the existing
@@ -29,6 +30,7 @@ state. “On Trip” and “On Trip (Off At Next Station)” refer to the existi
 | On Trip In Station | `tripId: string`; `stopArrivalGameTimeMs: number`; derived `remainingStopTimeMs: number`. |
 | In Transit (Off At Next Station) | `tripId: string`; `nextStopId: string`. |
 | In Transit | `tripId: string`. |
+| Game Over | No information; the trip and station are discarded. |
 
 The state and its fields form a discriminated union. Components narrow on
 `state` to access the relevant information; unrelated fields are not retained
@@ -66,6 +68,7 @@ stateDiagram-v2
     state "On Trip In Station" as OnTrip
     state "In Transit" as InTransit
     state "In Transit (Off At Next Station)" as GettingOff
+    state "Game Over" as GameOver
 
     [*] --> Outside
     Outside --> InStation: ENTER_STATION
@@ -82,6 +85,13 @@ stateDiagram-v2
     InTransit --> GettingOff: REQUEST_EXIT
     GettingOff --> InTransit: CANCEL_EXIT
     GettingOff --> InStation: ARRIVE_AT_STATION
+
+    Outside --> GameOver: GAME_OVER
+    InStation --> GameOver: GAME_OVER
+    Waiting --> GameOver: GAME_OVER
+    OnTrip --> GameOver: GAME_OVER
+    InTransit --> GameOver: GAME_OVER
+    GettingOff --> GameOver: GAME_OVER
 ```
 
 ## Allowed transitions
@@ -99,6 +109,7 @@ stateDiagram-v2
 | In Transit | `REQUEST_EXIT` | In Transit (Off At Next Station) |
 | In Transit (Off At Next Station) | `CANCEL_EXIT` | In Transit |
 | In Transit (Off At Next Station) | `ARRIVE_AT_STATION` | In Station |
+| Any state except Game Over | `GAME_OVER` | Game Over |
 
 ## Rules
 
@@ -112,6 +123,9 @@ stateDiagram-v2
 - `CANCEL_EXIT` means the player will stay aboard at the next arrival.
 - `LEAVE_STATION` is available only in **In Station**. A waiting player must
   cancel waiting first; an onboard player must get off first.
+- `GAME_OVER` is accepted in every state except Game Over itself, which is
+  terminal: every event, including a second `GAME_OVER`, is rejected there.
+  `GameOverWatcher` sends it when the wallet balance becomes negative.
 - Arrival and departure events describe state changes. Their automatic timing
   and triggers will be defined when scheduling is implemented.
 
@@ -149,16 +163,18 @@ Events carrying information use `{ type, ...payload }` objects:
 | `ARRIVE_AT_STATION` | Required `stationId` and `stopArrivalGameTimeMs`; optional `nextTrips`, defaulting to an empty list. Staying aboard records the stop arrival time; an exit request instead moves to the supplied station and trip list. |
 | `REQUEST_EXIT` | Required `nextStopId`. Carries the trip ID into In Transit (Off At Next Station). |
 | `CANCEL_EXIT` | No payload. Keeps the trip ID and clears the exit request. |
+| `GAME_OVER` | No payload. Ends the game from any other state. |
 
 Bare strings remain supported for `ENTER_STATION`, `LEAVE_STATION`,
-`CANCEL_WAIT`, `DEPART_STATION`, and `CANCEL_EXIT`. Bare `ENTER_STATION` requires
+`CANCEL_WAIT`, `DEPART_STATION`, `CANCEL_EXIT`, and `GAME_OVER`. Bare `ENTER_STATION` requires
 an already selected Outside station. The other events require their documented
 payloads. Missing or invalid IDs, trip-list records, or timestamps are rejected.
 The caller is responsible for supplying the correct trip, stop, and station;
 the FSM does not validate them against a backend schedule.
 
 The `GameState` IDs are `outside`, `in_station`, `waiting_for_trip`,
-`on_trip_in_station`, `in_transit`, and `in_transit_off_at_next_station`.
+`on_trip_in_station`, `in_transit`, `in_transit_off_at_next_station`, and
+`game_over`.
 `GAME_STATE_LABELS` maps these IDs to the display names above. Events use the
 exact uppercase names in the transition table.
 
@@ -171,9 +187,10 @@ The Player state card displays the current label and fields between the wallet
 and clock, with **Not selected** for the app's initial `stationId: null`.
 
 There is no direct state setter or reset event. Reloading or remounting the
-provider creates a fresh machine in **Outside**. The current UI has no
-transition controls, and no automatic events are emitted, so it remains in
-**Outside** until another component calls `send()`.
+provider creates a fresh machine in **Outside**. The only transition controls
+in the current UI are the station entrance buttons (`ENTER_STATION`), and the
+only automatic event is `GAME_OVER` from `GameOverWatcher`, so the player
+remains in **Outside** until one of those happens.
 
 ## Validation scenarios
 
@@ -188,8 +205,9 @@ transition controls, and no automatic events are emitted, so it remains in
    next arrival leaves the player aboard in On Trip In Station.
 6. **Reject invalid actions:** boarding from Outside, leaving while waiting or
    onboard, and `GET_OFF_TRIP` while in transit all leave the state unchanged.
-7. **Exhaustive transitions:** verify all 60 combinations of six states and ten
-   events: 11 succeed with the documented destination and 49 are rejected.
+7. **Exhaustive transitions:** verify all 77 combinations of seven states and
+   eleven events: 17 succeed with the documented destination and 60 are
+   rejected.
 8. **Consecutive events and snapshots:** multiple valid events sent before a
    React rerender use the latest state. Rejected events preserve snapshot
    identity; successful events publish a new snapshot without changing earlier
@@ -210,8 +228,10 @@ transition controls, and no automatic events are emitted, so it remains in
 
 The runtime model, shared provider/hook, and state-information display implement
 this definition. Information is supplied through the frontend API; backend
-lookups, transition controls, fares and wallet deductions, and automatic
-scheduling remain for later work. The FSM does not run a separate animation
-loop. Clock ticks and speed changes update derived information but do not
-trigger transitions. Wallet payments do not trigger transitions, and
-transitions do not change the clock or wallet.
+lookups, the remaining transition controls, busking, and automatic scheduling
+remain for later work. Entering the station costs a fare or risks a fine, but
+that logic lives outside the FSM (`src/fare/`), which only receives
+`ENTER_STATION`. The FSM does not run a separate animation loop. Clock ticks
+and speed changes update derived information but do not trigger transitions.
+Transitions do not change the clock or wallet; the one wallet-driven event is
+`GAME_OVER`, sent by `GameOverWatcher` when the balance goes negative.

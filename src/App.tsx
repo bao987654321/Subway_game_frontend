@@ -1,6 +1,7 @@
 import { GameClock } from './components/GameClock'
 import { Wallet } from './components/Wallet'
 import { PlayerState } from './components/PlayerState'
+import { StationEntry } from './components/StationEntry'
 
 function App() {
   return (
@@ -8,6 +9,7 @@ function App() {
       <div className="game-dashboard">
         <Wallet />
         <PlayerState />
+        <StationEntry />
         <GameClock />
       </div>
     </main>

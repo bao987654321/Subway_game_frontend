@@ -5,6 +5,7 @@ export const GAME_STATE_LABELS = {
   on_trip_in_station: 'On Trip In Station',
   in_transit: 'In Transit',
   in_transit_off_at_next_station: 'In Transit (Off At Next Station)',
+  game_over: 'Game Over',
 } as const
 
 export type GameState = keyof typeof GAME_STATE_LABELS
@@ -20,6 +21,7 @@ export type GameEventType =
   | 'ARRIVE_AT_STATION'
   | 'REQUEST_EXIT'
   | 'CANCEL_EXIT'
+  | 'GAME_OVER'
 
 export interface UpcomingTrip {
   readonly tripId: string
@@ -46,6 +48,7 @@ export type GameStateSnapshot =
       tripId: string
       nextStopId: string
     }>
+  | Readonly<{ state: 'game_over' }>
 
 export type GameStateInfo =
   | Exclude<GameStateSnapshot, { state: 'on_trip_in_station' }>
@@ -59,6 +62,7 @@ type SimpleGameEvent =
   | 'CANCEL_WAIT'
   | 'DEPART_STATION'
   | 'CANCEL_EXIT'
+  | 'GAME_OVER'
 
 type GameEventPayload =
   | { type: 'ENTER_STATION'; stationId?: string; nextTrips?: readonly UpcomingTrip[] }
@@ -81,27 +85,35 @@ export const STOP_DURATION_MS = 30_000
 const TRANSITIONS: Record<GameState, Partial<Record<GameEventType, GameState>>> = {
   outside: {
     ENTER_STATION: 'in_station',
+    GAME_OVER: 'game_over',
   },
   in_station: {
     LEAVE_STATION: 'outside',
     WAIT_FOR_TRIP: 'waiting_for_trip',
+    GAME_OVER: 'game_over',
   },
   waiting_for_trip: {
     CANCEL_WAIT: 'in_station',
     BOARD_TRIP: 'on_trip_in_station',
+    GAME_OVER: 'game_over',
   },
   on_trip_in_station: {
     GET_OFF_TRIP: 'in_station',
     DEPART_STATION: 'in_transit',
+    GAME_OVER: 'game_over',
   },
   in_transit: {
     ARRIVE_AT_STATION: 'on_trip_in_station',
     REQUEST_EXIT: 'in_transit_off_at_next_station',
+    GAME_OVER: 'game_over',
   },
   in_transit_off_at_next_station: {
     CANCEL_EXIT: 'in_transit',
     ARRIVE_AT_STATION: 'in_station',
+    GAME_OVER: 'game_over',
   },
+  // Terminal: the game is over and no event can change that.
+  game_over: {},
 }
 
 function isId(value: unknown): value is string {
@@ -261,6 +273,9 @@ export function createGameStateMachine(initialStationId: string | null = null) {
         case 'CANCEL_EXIT':
           if (snapshot.state !== 'in_transit_off_at_next_station') return false
           nextSnapshot = { state: 'in_transit', tripId: snapshot.tripId }
+          break
+        case 'GAME_OVER':
+          nextSnapshot = { state: 'game_over' }
           break
         default:
           return false
