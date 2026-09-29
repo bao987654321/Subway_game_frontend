@@ -1,5 +1,5 @@
 import type { ScheduledTrip, TripStop } from '../api/trips.ts'
-import { STOP_DURATION_MS, type GameEvent, type GameStateSnapshot } from './state-machine.ts'
+import { STOP_DURATION_MS, type GameEvent, type GameState, type GameStateSnapshot } from './state-machine.ts'
 
 export interface JourneyStop extends TripStop {
   readonly stationId: string
@@ -7,6 +7,8 @@ export interface JourneyStop extends TripStop {
 
 export interface JourneyPlan {
   readonly tripId: string
+  readonly routeId: string
+  readonly headsign: string | null
   readonly boardingIndex: number
   readonly stops: readonly JourneyStop[]
 }
@@ -15,6 +17,18 @@ export interface JourneyProgress {
   readonly plan: JourneyPlan
   /** Current stop when stopped; the stop just departed when in transit. */
   readonly stopIndex: number
+}
+
+export interface RouteProgress {
+  readonly currentStop: JourneyStop
+  readonly nextStop: JourneyStop | null
+  readonly phase: 'waiting' | 'stopped' | 'moving' | 'finished'
+  readonly remainingToNextStopMs: number | null
+  readonly remainingDwellMs: number | null
+  readonly segmentProgress: number
+  /** Stops reached along the full route, including the current stop after boarding. */
+  readonly completedStops: number
+  readonly totalStops: number
 }
 
 interface JourneyMachine {
@@ -97,8 +111,82 @@ export function createJourneyPlan(
 
   return Object.freeze({
     tripId: trip.tripId,
+    routeId: trip.routeId,
+    headsign: trip.headsign,
     boardingIndex,
     stops: Object.freeze(normalized),
+  })
+}
+
+/** Derive route display values without changing the journey or advancing the state machine. */
+export function getRouteProgress(
+  progress: JourneyProgress,
+  state: GameState,
+  gameTimeMs: number,
+): RouteProgress {
+  if (!isTimestamp(gameTimeMs)) throw new RangeError('Invalid game timestamp.')
+  const { plan, stopIndex } = progress
+  if (
+    !Number.isSafeInteger(stopIndex) ||
+    stopIndex < plan.boardingIndex || stopIndex >= plan.stops.length
+  ) throw new RangeError('Invalid journey stop index.')
+
+  const currentStop = plan.stops[stopIndex]!
+  const followingStop = plan.stops[stopIndex + 1] ?? null
+  const base = {
+    currentStop,
+    completedStops: stopIndex + 1,
+    totalStops: plan.stops.length,
+  }
+
+  if (state === 'waiting_for_trip') {
+    return Object.freeze({
+      ...base,
+      nextStop: currentStop,
+      phase: 'waiting',
+      remainingToNextStopMs: Math.max(currentStop.arrivalGameTimeMs - gameTimeMs, 0),
+      remainingDwellMs: null,
+      segmentProgress: 0,
+      completedStops: stopIndex,
+    })
+  }
+
+  if (state === 'on_trip_in_station') {
+    return Object.freeze({
+      ...base,
+      nextStop: followingStop,
+      phase: followingStop ? 'stopped' : 'finished',
+      remainingToNextStopMs: followingStop
+        ? Math.max(followingStop.arrivalGameTimeMs - gameTimeMs, 0) : null,
+      remainingDwellMs: Math.max(currentStop.departureGameTimeMs - gameTimeMs, 0),
+      segmentProgress: 0,
+    })
+  }
+
+  if ((state === 'in_transit' || state === 'in_transit_off_at_next_station') && followingStop) {
+    const durationMs = followingStop.arrivalGameTimeMs - currentStop.departureGameTimeMs
+    const elapsedMs = gameTimeMs - currentStop.departureGameTimeMs
+    // Adjacent stops can share the same normalized departure/arrival boundary.
+    const segmentProgress = durationMs > 0
+      ? Math.max(0, Math.min(elapsedMs / durationMs, 1))
+      : gameTimeMs >= followingStop.arrivalGameTimeMs ? 1 : 0
+    return Object.freeze({
+      ...base,
+      nextStop: followingStop,
+      phase: 'moving',
+      remainingToNextStopMs: Math.max(followingStop.arrivalGameTimeMs - gameTimeMs, 0),
+      remainingDwellMs: null,
+      segmentProgress,
+    })
+  }
+
+  return Object.freeze({
+    ...base,
+    nextStop: null,
+    phase: 'finished',
+    remainingToNextStopMs: null,
+    remainingDwellMs: null,
+    segmentProgress: 0,
   })
 }
 

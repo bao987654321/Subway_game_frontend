@@ -108,8 +108,7 @@ main {
   gap: 1rem;
 }
 
-.player-state-details dt,
-.player-state-empty {
+.player-state-details dt {
   color: #667085;
 }
 
@@ -119,24 +118,6 @@ main {
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
   text-align: right;
-}
-
-.player-state-trips {
-  display: grid;
-  gap: 0.75rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.player-state-trips li {
-  display: grid;
-  gap: 0.125rem;
-}
-
-.player-state-trips time {
-  color: #667085;
-  font-size: 0.8125rem;
 }
 
 .player-station-id {
