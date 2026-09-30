@@ -54,7 +54,9 @@ export function GameClock() {
         </div>
       </div>
 
-      <p className="clock-note">Game time pauses when this tab is hidden.</p>
+      <p className="clock-note">
+        Game time pauses when this tab is hidden. Press N for 1×.
+      </p>
     </section>
   )
 }

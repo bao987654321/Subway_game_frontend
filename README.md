@@ -40,6 +40,8 @@ origin through CORS. Vite's proxy is not included in the static `dist/` files.
 
 The clock starts at your computer's current time at 1x speed and displays the
 local date and 24-hour time. Adjust the slider from 0.5x to 200x in 0.5x steps.
+Press **N** to return to 1x; the shortcut leaves typing and dropdown navigation
+alone.
 Game time pauses while the page is hidden and resumes without catching up.
 Reloading or starting a new game starts a fresh clock.
 

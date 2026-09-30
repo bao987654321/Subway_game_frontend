@@ -47,17 +47,12 @@ function PlayerStateDetails({ info }: { info: ReturnType<typeof useGameState> })
         </>
       )
     case 'on_trip_in_station':
+    case 'in_transit':
       return (
-        <>
-          <div>
-            <dt>Trip ID</dt>
-            <dd>{info.tripId}</dd>
-          </div>
-          <div>
-            <dt>Time remaining at stop</dt>
-            <dd>{Math.ceil(info.remainingStopTimeMs / 1_000)} game seconds</dd>
-          </div>
-        </>
+        <div>
+          <dt>Trip ID</dt>
+          <dd>{info.tripId}</dd>
+        </div>
       )
     case 'in_transit_off_at_next_station':
       return (
@@ -71,13 +66,6 @@ function PlayerStateDetails({ info }: { info: ReturnType<typeof useGameState> })
             <dd>{info.nextStopId}</dd>
           </div>
         </>
-      )
-    case 'in_transit':
-      return (
-        <div>
-          <dt>Trip ID</dt>
-          <dd>{info.tripId}</dd>
-        </div>
       )
   }
 }
@@ -93,10 +81,12 @@ export function PlayerState() {
           {GAME_STATE_LABELS[info.state]}
         </p>
       </header>
-      <dl className="player-state-details">
-        <PlayerStateDetails info={info} />
-      </dl>
-      <GameControls />
+      <div className="player-state-body">
+        <dl className="player-state-details">
+          <PlayerStateDetails info={info} />
+        </dl>
+        <GameControls />
+      </div>
     </section>
   )
 }

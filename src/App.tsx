@@ -21,9 +21,9 @@ function App() {
                 <GameClock />
                 <StartingStationPicker />
                 <Wallet />
-                <PlayerState />
                 <RouteProgress />
                 <RouteMap />
+                <PlayerState />
               </WalletProvider>
             </GameStateProvider>
           </GameClockProvider>

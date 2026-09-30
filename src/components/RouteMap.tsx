@@ -15,6 +15,7 @@ interface MapStop {
   readonly name: string
   readonly stopSequence: number
   readonly point: MapPoint | null
+  readonly hitRadius: number
 }
 
 interface MapDrawing {
@@ -61,7 +62,10 @@ const MapTrack = memo(function MapTrack({ drawing, stopIndex, state }: {
               aria-pressed={selectedIndex === index}
               onMouseEnter={() => setHoveredIndex(index)}
               onMouseLeave={() => setHoveredIndex(null)}
-              onFocus={() => setSelectedIndex(index)}
+              onFocus={() => {
+                setHoveredIndex(null)
+                setSelectedIndex(index)
+              }}
               onClick={() => setSelectedIndex(index)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
@@ -71,9 +75,9 @@ const MapTrack = memo(function MapTrack({ drawing, stopIndex, state }: {
               }}
             >
               <title>{`${stop.name} · ${description}`}</title>
-              <circle r="18" fill="transparent" />
-              <circle className="route-map-stop-halo" r="12" opacity={activeIndex === index ? 1 : 0} />
-              <circle className="route-map-stop-dot" r={isCurrent || isNext ? 8 : 5} />
+              <circle r={stop.hitRadius} fill="transparent" />
+              <circle className="route-map-stop-halo" r="12" opacity={activeIndex === index ? 1 : 0} pointerEvents="none" />
+              <circle className="route-map-stop-dot" r={isCurrent || isNext ? 8 : 5} pointerEvents="none" />
             </g>
           )
         })}
@@ -139,16 +143,28 @@ function JourneyMap({ journey, state }: { journey: JourneyProgress; state: GameS
       .filter((coordinate): coordinate is MapCoordinate => coordinate !== null)
     const projection = createMapProjection([...shape.coordinates, ...coordinates], 640, 480, 40)
     if (!projection) return null
+    const stops = stations.map((station) => ({
+      name: station.name,
+      stopSequence: station.stopSequence,
+      point: station.coordinate ? projection.project(station.coordinate) : null,
+    }))
     return {
       path: shape.coordinates.map((coordinate, index) => {
         const point = projection.project(coordinate)!
         return `${index === 0 ? 'M' : 'L'}${point.x.toFixed(2)} ${point.y.toFixed(2)}`
       }).join(' '),
-      stops: stations.map((station) => ({
-        name: station.name,
-        stopSequence: station.stopSequence,
-        point: station.coordinate ? projection.project(station.coordinate) : null,
-      })),
+      stops: stops.map((stop) => {
+        // Keep nearby stations' invisible click targets from covering each other.
+        let hitRadius = 18
+        if (stop.point) {
+          for (const other of stops) {
+            if (!other.point) continue
+            const distance = Math.hypot(stop.point.x - other.point.x, stop.point.y - other.point.y)
+            if (distance > 0) hitRadius = Math.min(hitRadius, distance / 2)
+          }
+        }
+        return { ...stop, hitRadius }
+      }),
     }
   }, [shape, plan, byId])
 

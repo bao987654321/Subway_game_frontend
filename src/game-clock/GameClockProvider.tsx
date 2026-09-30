@@ -15,6 +15,38 @@ export function GameClockProvider({ children }: { children: ReactNode }) {
   )
 
   useEffect(() => {
+    function resetSpeed(event: KeyboardEvent) {
+      if (
+        event.key.toLowerCase() !== 'n' ||
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.repeat ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey
+      ) {
+        return
+      }
+
+      const target = event.target
+      if (
+        (target instanceof HTMLInputElement && target.type !== 'range') ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      setSpeed(1)
+    }
+
+    window.addEventListener('keydown', resetSpeed, true)
+    return () => window.removeEventListener('keydown', resetSpeed, true)
+  }, [setSpeed])
+
+  useEffect(() => {
     let frameId: number | undefined
 
     function stopLoop() {

@@ -162,16 +162,18 @@ export function RouteProgress() {
         )}
       </div>
 
-      {!waiting && !finished && nextName && (
-        <progress
-          className="route-progress-track"
-          max={1}
-          value={progress.segmentProgress}
-          aria-label={`Travel progress from ${currentName} to ${nextName}`}
-        >
-          {Math.round(progress.segmentProgress * 100)}%
-        </progress>
-      )}
+      <div className="route-progress-track-slot">
+        {!waiting && !finished && nextName && (
+          <progress
+            className="route-progress-track"
+            max={1}
+            value={progress.segmentProgress}
+            aria-label={`Travel progress from ${currentName} to ${nextName}`}
+          >
+            {Math.round(progress.segmentProgress * 100)}%
+          </progress>
+        )}
+      </div>
 
       {countdown !== null && (
         <div className="route-progress-countdown">
@@ -182,15 +184,17 @@ export function RouteProgress() {
           <span className="route-progress-time-unit">game time</span>
         </div>
       )}
-      {phase === 'stopped' && remainingDwellMs !== null && (
-        <p className="route-progress-note">
-          Departs in {formatCountdown(remainingDwellMs)} of game time. Next-stop time includes this stop.
-        </p>
-      )}
-      {finished && <p className="route-progress-note">This is the final stop. You’ll get off here.</p>}
-      {state === 'in_transit_off_at_next_station' && nextName && (
-        <p className="route-progress-exit">Getting off at {nextName}.</p>
-      )}
+      <div className="route-progress-notice-slot">
+        {phase === 'stopped' && remainingDwellMs !== null && (
+          <p className="route-progress-note">
+            Departs in {formatCountdown(remainingDwellMs)} of game time. Next-stop time includes this stop.
+          </p>
+        )}
+        {finished && <p className="route-progress-note">This is the final stop. You’ll get off here.</p>}
+        {state === 'in_transit_off_at_next_station' && nextName && (
+          <p className="route-progress-exit">Getting off at {nextName}.</p>
+        )}
+      </div>
 
       <RouteDiagram journey={journey} progress={progress} stationName={stationName} />
     </section>
