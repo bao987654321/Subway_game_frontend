@@ -120,3 +120,90 @@ test('publishes stable snapshots and preserves previously published balances', (
   assert.deepEqual(paid, { balance: 4.5 })
   assert.deepEqual(wallet.getSnapshot(), { balance: 4 })
 })
+
+test('earning adds to the balance and rejects invalid amounts', () => {
+  const wallet = createWallet(() => 0.5)
+
+  assert.equal(wallet.earn_money(1.25), true)
+  assert.deepEqual(wallet.getSnapshot(), { balance: 6.75 })
+
+  const before = wallet.getSnapshot()
+  for (const amount of [0, -1, NaN, Infinity, 0.001, Number.MAX_VALUE]) {
+    assert.equal(wallet.earn_money(amount), false, `earning ${amount}`)
+    assert.equal(wallet.getSnapshot(), before)
+  }
+})
+
+test('fines may overdraw the wallet, unlike payments', () => {
+  const wallet = createWallet(() => 0)
+
+  assert.equal(wallet.pay_money(50), false)
+  assert.deepEqual(wallet.getSnapshot(), { balance: 1 })
+  assert.equal(wallet.fine(50), true)
+  assert.deepEqual(wallet.getSnapshot(), { balance: -49 })
+  assert.equal(wallet.pay_money(0.01), false)
+  assert.equal(wallet.fine(0), false)
+})
+
+test('earning while overdrawn is allowed and can restore a positive balance', () => {
+  const wallet = createWallet(() => 0)
+
+  assert.equal(wallet.fine(5), true)
+  assert.equal(wallet.earn_money(1), true)
+  assert.deepEqual(wallet.getSnapshot(), { balance: -3 })
+  assert.equal(wallet.earn_money(4), true)
+  assert.deepEqual(wallet.getSnapshot(), { balance: 1 })
+})
+
+test('all transactions share cent validation and preserve snapshots on rejection', () => {
+  const wallet = createWallet(() => 0.5)
+  for (const method of ['pay_money', 'earn_money', 'fine']) {
+    const before = wallet.getSnapshot()
+    for (const amount of [0, -0, -1, NaN, Infinity, -Infinity, Number.MIN_VALUE, 0.001, 1.005, 0.30001, Number.MAX_VALUE]) {
+      assert.equal(wallet[method](amount), false, `${method} rejects ${amount}`)
+      assert.equal(wallet.getSnapshot(), before)
+    }
+  }
+})
+
+test('earnings and fines accept ordinary floating-point cent imprecision', () => {
+  const wallet = createWallet(() => 0)
+  assert.equal(wallet.earn_money(0.1 + 0.2), true)
+  assert.equal(wallet.getSnapshot().balance, 1.3)
+  assert.equal(wallet.fine(0.1 + 0.2), true)
+  assert.equal(wallet.getSnapshot().balance, 1)
+})
+
+test('earnings are immediately available to payments and stay exact over repeated transactions', () => {
+  const wallet = createWallet(() => 0)
+  for (let minute = 1; minute <= 100; minute += 1) {
+    assert.equal(wallet.earn_money(0.25), true)
+    assert.equal(wallet.pay_money(0.1), true)
+    assert.equal(wallet.getSnapshot().balance, (100 + minute * 15) / 100)
+  }
+  assert.equal(wallet.pay_money(16), true)
+  assert.equal(wallet.getSnapshot().balance, 0)
+})
+
+test('earnings cannot exceed the safe-integer balance limit', () => {
+  const wallet = createWallet(() => 0)
+  assert.equal(wallet.earn_money((Number.MAX_SAFE_INTEGER - 100) / 100), true)
+  const limit = wallet.getSnapshot()
+  assert.equal(limit.balance, Number.MAX_SAFE_INTEGER / 100)
+  assert.equal(wallet.earn_money(0.01), false)
+  assert.equal(wallet.getSnapshot(), limit)
+  assert.equal(wallet.pay_money(0.01), true)
+  assert.equal(wallet.earn_money(0.01), true)
+})
+
+test('fines cannot push debt below the safe-integer balance limit', () => {
+  const wallet = createWallet(() => 0)
+  assert.equal(wallet.fine(Number.MAX_SAFE_INTEGER / 100), true)
+  assert.equal(wallet.fine(1), true)
+  const limit = wallet.getSnapshot()
+  assert.equal(limit.balance, Number.MIN_SAFE_INTEGER / 100)
+  assert.equal(wallet.fine(0.01), false)
+  assert.equal(wallet.getSnapshot(), limit)
+  assert.equal(wallet.earn_money(0.01), true)
+  assert.equal(wallet.fine(0.01), true)
+})

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { GameStateContext } from './context'
 import { createGameStateMachine, STOP_DURATION_MS } from './state-machine'
@@ -10,6 +10,9 @@ import { advanceJourney, createJourneyPlan } from './journey'
 import type { JourneyProgress } from './journey'
 import { GameControlsContext } from './controls-context'
 import type { StationTrips } from './controls-context'
+import { useWallet } from '../wallet/context'
+import { createBusker, getBuskingPhase } from '../busking/busking'
+import { BuskingContext } from '../busking/context'
 
 export function GameStateProvider({
   children,
@@ -22,7 +25,10 @@ export function GameStateProvider({
 }) {
   const { gameTimeMs } = useGameClock()
   const { byId } = useStationCatalog()
+  const { earn_money } = useWallet()
   const [machine] = useState(() => createGameStateMachine(initialStationId))
+  const [busker] = useState(() => createBusker())
+  const buskingSnapshot = useSyncExternalStore(busker.subscribe, busker.getSnapshot)
   const [snapshot, setSnapshot] = useState(machine.getSnapshot)
   const [tripResult, setTripResult] = useState<{ key: string; list: StationTrips } | null>(null)
   const [journey, setJourney] = useState<JourneyProgress | null>(null)
@@ -50,14 +56,22 @@ export function GameStateProvider({
     setJourney(next)
   }, [])
 
+  const settleBusking = useCallback(() => {
+    const cents = busker.settle(timeRef.current)
+    if (cents > 0) earn_money(cents / 100)
+  }, [busker, earn_money])
+
   const syncJourney = useCallback(() => {
     const current = journeyRef.current
     if (!current) return
     const before = machine.getSnapshot()
+    // Settle before boarding so fast clock jumps cannot lose completed minutes.
+    if (before.state === 'waiting_for_trip') settleBusking()
     const next = advanceJourney(machine, current, timeRef.current)
+    if (machine.getSnapshot().state !== 'waiting_for_trip') busker.stop()
     if (next !== current) publishJourney(next)
     if (machine.getSnapshot() !== before) setSnapshot(machine.getSnapshot())
-  }, [machine, publishJourney])
+  }, [machine, busker, publishJourney, settleBusking])
 
   useEffect(() => { syncJourney() }, [gameTimeMs, syncJourney])
 
@@ -108,11 +122,26 @@ export function GameStateProvider({
   const send = useCallback(
     (event: GameEvent): boolean => {
       // Apply events before rendering so consecutive calls use the latest state.
+      const eventType = typeof event === 'string' ? event : event.type
+      if (machine.getSnapshot().state === 'waiting_for_trip' && eventType !== 'GAME_OVER') {
+        settleBusking()
+      }
       const success = machine.send(event)
-      if (success) setSnapshot(machine.getSnapshot())
+      if (success) {
+        const next = machine.getSnapshot()
+        if (next.state !== 'waiting_for_trip') busker.stop()
+        if (next.state === 'game_over') {
+          tripRequestRef.current?.abort()
+          tripRequestRef.current = null
+          setChoosingTrip(false)
+          setActionError(null)
+          publishJourney(null)
+        }
+        setSnapshot(next)
+      }
       return success
     },
-    [machine],
+    [machine, busker, publishJourney, settleBusking],
   )
 
   const selectStartingStation = useCallback(
@@ -128,11 +157,6 @@ export function GameStateProvider({
     tripRequestRef.current?.abort()
     tripRequestRef.current = null
     setChoosingTrip(false)
-  }
-
-  function enterStation() {
-    setActionError(null)
-    send('ENTER_STATION')
   }
 
   function leaveStation() {
@@ -170,6 +194,9 @@ export function GameStateProvider({
         return
       }
       if (send({ type: 'WAIT_FOR_TRIP', tripId: trip.tripId })) {
+        // Main boards at arrival: reserve a full packing minute before that.
+        busker.stop()
+        busker.start(timeRef.current, plan.stops[plan.boardingIndex]!.arrivalGameTimeMs)
         publishJourney({ plan, stopIndex: plan.boardingIndex })
         syncJourney()
       }
@@ -228,13 +255,20 @@ export function GameStateProvider({
   }
 
   return (
-    <GameStateContext.Provider value={{ ...snapshot, send, selectStartingStation }}>
+    <GameStateContext.Provider value={{ ...snapshot, send, selectStartingStation, getSnapshot: machine.getSnapshot }}>
       <GameControlsContext.Provider value={{
         stationTrips, journey, choosingTrip, actionError,
-        enterStation, leaveStation, chooseTrip, cancelWait, getOff, requestExit, cancelExit, quitGame,
+        leaveStation, chooseTrip, cancelWait, getOff, requestExit, cancelExit, quitGame,
         refreshTrips: () => setRefreshAttempt((attempt) => attempt + 1),
       }}>
-        {children}
+        <BuskingContext.Provider value={{ busking: snapshot.state === 'waiting_for_trip' && buskingSnapshot ? {
+          phase: getBuskingPhase(buskingSnapshot, gameTimeMs),
+          paidMinutes: buskingSnapshot.paidMinutes,
+          minutes: buskingSnapshot.minutes,
+          earnedCents: buskingSnapshot.earnedCents,
+        } : null }}>
+          {children}
+        </BuskingContext.Provider>
       </GameControlsContext.Provider>
     </GameStateContext.Provider>
   )

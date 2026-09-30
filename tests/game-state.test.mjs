@@ -8,14 +8,24 @@ import {
 
 // Independent fixtures from the agreed FSM, not the implementation's table.
 const expectedTransitions = {
-  outside: { ENTER_STATION: 'in_station' },
-  in_station: { LEAVE_STATION: 'outside', WAIT_FOR_TRIP: 'waiting_for_trip' },
-  waiting_for_trip: { CANCEL_WAIT: 'in_station', BOARD_TRIP: 'on_trip_in_station' },
-  on_trip_in_station: { GET_OFF_TRIP: 'in_station', DEPART_STATION: 'in_transit' },
+  outside: { ENTER_STATION: 'in_station', GAME_OVER: 'game_over' },
+  in_station: {
+    LEAVE_STATION: 'outside', WAIT_FOR_TRIP: 'waiting_for_trip', GAME_OVER: 'game_over',
+  },
+  waiting_for_trip: {
+    CANCEL_WAIT: 'in_station', BOARD_TRIP: 'on_trip_in_station', GAME_OVER: 'game_over',
+  },
+  on_trip_in_station: {
+    GET_OFF_TRIP: 'in_station', DEPART_STATION: 'in_transit', GAME_OVER: 'game_over',
+  },
   in_transit: {
     ARRIVE_AT_STATION: 'on_trip_in_station', REQUEST_EXIT: 'in_transit_off_at_next_station',
+    GAME_OVER: 'game_over',
   },
-  in_transit_off_at_next_station: { CANCEL_EXIT: 'in_transit', ARRIVE_AT_STATION: 'in_station' },
+  in_transit_off_at_next_station: {
+    CANCEL_EXIT: 'in_transit', ARRIVE_AT_STATION: 'in_station', GAME_OVER: 'game_over',
+  },
+  game_over: {},
 }
 
 const now = new Date(2026, 8, 29, 12, 0, 0).getTime()
@@ -36,6 +46,7 @@ const eventFixtures = {
   },
   REQUEST_EXIT: { type: 'REQUEST_EXIT', nextStopId: '104S' },
   CANCEL_EXIT: 'CANCEL_EXIT',
+  GAME_OVER: 'GAME_OVER',
 }
 
 const routesToState = {
@@ -47,6 +58,7 @@ const routesToState = {
   in_transit_off_at_next_station: [
     'ENTER_STATION', 'WAIT_FOR_TRIP', 'BOARD_TRIP', 'DEPART_STATION', 'REQUEST_EXIT',
   ],
+  game_over: ['GAME_OVER'],
 }
 
 function createMachineAt(state) {
@@ -74,6 +86,7 @@ test('starts outside with an optional station and the agreed labels', () => {
     on_trip_in_station: 'On Trip In Station',
     in_transit: 'In Transit',
     in_transit_off_at_next_station: 'In Transit (Off At Next Station)',
+    game_over: 'Game Over',
   })
   for (const invalid of ['', '   ', 101]) {
     assert.throws(() => createGameStateMachine(invalid), TypeError)
@@ -130,7 +143,7 @@ test('starting station selection cannot replace a station or change an active jo
   assert.equal(selected.getSnapshot(), returnedOutside)
 })
 
-// Covers all 60 combinations: 11 accepted transitions and 49 rejections.
+// Covers all 77 combinations: 17 accepted transitions and 60 rejections.
 for (const [state, transitions] of Object.entries(expectedTransitions)) {
   for (const [name, event] of Object.entries(eventFixtures)) {
     const nextState = transitions[name]
@@ -146,6 +159,33 @@ for (const [state, transitions] of Object.entries(expectedTransitions)) {
     })
   }
 }
+
+test('game over is reachable from every other state and is terminal', () => {
+  for (const state of Object.keys(expectedTransitions).filter((name) => name !== 'game_over')) {
+    const machine = createMachineAt(state)
+    assert.equal(machine.send('GAME_OVER'), true, state)
+    assert.deepEqual(machine.getSnapshot(), { state: 'game_over' })
+    assert.equal(Object.isFrozen(machine.getSnapshot()), true)
+    for (const event of Object.values(eventFixtures)) assertRejected(machine, event)
+    assertRejected(machine, { type: 'GAME_OVER' })
+  }
+})
+
+test('object-form game over terminates a game before a starting station is selected', () => {
+  const machine = createGameStateMachine()
+  assert.equal(machine.send({ type: 'GAME_OVER' }), true)
+  const ended = machine.getSnapshot()
+  assert.deepEqual(ended, { state: 'game_over' })
+  assert.equal(machine.selectStartingStation('101'), false)
+  assert.equal(machine.refreshStationTrips('101', nextTrips), false)
+  assert.equal(machine.getSnapshot(), ended)
+})
+
+test('game over while waiting discards the retained departures', () => {
+  const machine = createMachineAt('waiting_for_trip')
+  assert.equal(machine.send('GAME_OVER'), true)
+  assertRejected(machine, 'CANCEL_WAIT')
+})
 
 test('entering requires a station and can select one when none is initialized', () => {
   const machine = createGameStateMachine()
@@ -413,7 +453,7 @@ test('the 30-second dwell uses original arrival when boarding partway through', 
 })
 
 test('derived state preserves untimed fields without advancing the machine', () => {
-  for (const state of ['outside', 'waiting_for_trip', 'in_transit', 'in_transit_off_at_next_station']) {
+  for (const state of ['outside', 'waiting_for_trip', 'in_transit', 'in_transit_off_at_next_station', 'game_over']) {
     const machine = createMachineAt(state)
     const snapshot = machine.getSnapshot()
     assert.deepEqual(getGameStateInfo(snapshot, now + 86_400_000), snapshot)

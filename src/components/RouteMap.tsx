@@ -202,7 +202,7 @@ function JourneyMap({ journey, state }: { journey: JourneyProgress; state: GameS
 export function RouteMap() {
   const { journey } = useGameControls()
   const { state } = useGameState()
-  const activeJourney = journey && state !== 'outside' && state !== 'in_station' ? journey : null
+  const activeJourney = journey && state !== 'outside' && state !== 'in_station' && state !== 'game_over' ? journey : null
   return (
     <section className="route-map-card" aria-labelledby="route-map-title">
       <header className="route-map-header">

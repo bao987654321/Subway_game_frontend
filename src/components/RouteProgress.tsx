@@ -107,7 +107,7 @@ export function RouteProgress() {
   const { state } = useGameState()
   const { gameTimeMs } = useGameClock()
   const { byId } = useStationCatalog()
-  const progress = journey && state !== 'outside' && state !== 'in_station'
+  const progress = journey && state !== 'outside' && state !== 'in_station' && state !== 'game_over'
     ? getRouteProgress(journey, state, gameTimeMs)
     : null
 

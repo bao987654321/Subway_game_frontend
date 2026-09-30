@@ -14,7 +14,6 @@ export interface GameControlsContextValue {
   journey: JourneyProgress | null
   choosingTrip: boolean
   actionError: string | null
-  enterStation: () => void
   leaveStation: () => void
   refreshTrips: () => void
   chooseTrip: (tripId: string, stopSequence: number) => Promise<void>

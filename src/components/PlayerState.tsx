@@ -24,6 +24,8 @@ function StationField({ stationId }: { stationId: string | null }) {
 
 function PlayerStateDetails({ info }: { info: ReturnType<typeof useGameState> }) {
   switch (info.state) {
+    case 'game_over':
+      return <div><dt>Result</dt><dd>Your balance went below zero.</dd></div>
     case 'outside':
       return <StationField stationId={info.stationId} />
     case 'in_station':
