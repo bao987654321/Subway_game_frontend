@@ -1,8 +1,8 @@
 # Game State Machine
 
 This is the agreed definition of the player's finite state machine (FSM),
-implemented by the shared frontend game state model. It has **six states**,
-**ten events**, **eleven allowed transitions**, and starts in **Outside**.
+implemented by the shared frontend game state model. It has **seven states**,
+**eleven events**, **seventeen allowed transitions**, and starts in **Outside**.
 
 ## States
 
@@ -14,6 +14,7 @@ implemented by the shared frontend game state model. It has **six states**,
 | On Trip In Station | The player is aboard a train stopped at a station. |
 | In Transit | The player is aboard a moving train and plans to stay aboard at the next stop. |
 | In Transit (Off At Next Station) | The player is aboard a moving train and has requested to get off at the next station. |
+| Game Over | The session has ended because the wallet balance is negative. This state is terminal. |
 
 “On Train In Station” refers to **On Trip In Station**; it is not an additional
 state. “On Trip” and “On Trip (Off At Next Station)” refer to the existing
@@ -29,6 +30,7 @@ state. “On Trip” and “On Trip (Off At Next Station)” refer to the existi
 | On Trip In Station | `tripId: string`; `stopArrivalGameTimeMs: number`; derived `remainingStopTimeMs: number`. |
 | In Transit (Off At Next Station) | `tripId: string`; `nextStopId: string`. |
 | In Transit | `tripId: string`. |
+| Game Over | No station or trip fields. |
 
 The state and its fields form a discriminated union. Components narrow on
 `state` to access the relevant information; unrelated fields are not retained
@@ -71,6 +73,7 @@ stateDiagram-v2
     state "On Trip In Station" as OnTrip
     state "In Transit" as InTransit
     state "In Transit (Off At Next Station)" as GettingOff
+    state "Game Over" as GameOver
 
     [*] --> Outside
     Outside --> InStation: ENTER_STATION
@@ -87,6 +90,13 @@ stateDiagram-v2
     InTransit --> GettingOff: REQUEST_EXIT
     GettingOff --> InTransit: CANCEL_EXIT
     GettingOff --> InStation: ARRIVE_AT_STATION
+
+    Outside --> GameOver: GAME_OVER
+    InStation --> GameOver: GAME_OVER
+    Waiting --> GameOver: GAME_OVER
+    OnTrip --> GameOver: GAME_OVER
+    InTransit --> GameOver: GAME_OVER
+    GettingOff --> GameOver: GAME_OVER
 ```
 
 ## Allowed transitions
@@ -104,6 +114,12 @@ stateDiagram-v2
 | In Transit | `REQUEST_EXIT` | In Transit (Off At Next Station) |
 | In Transit (Off At Next Station) | `CANCEL_EXIT` | In Transit |
 | In Transit (Off At Next Station) | `ARRIVE_AT_STATION` | In Station |
+| Outside | `GAME_OVER` | Game Over |
+| In Station | `GAME_OVER` | Game Over |
+| In Station (Waiting For Trip) | `GAME_OVER` | Game Over |
+| On Trip In Station | `GAME_OVER` | Game Over |
+| In Transit | `GAME_OVER` | Game Over |
+| In Transit (Off At Next Station) | `GAME_OVER` | Game Over |
 
 ## Rules
 
@@ -121,17 +137,32 @@ stateDiagram-v2
   these events as the shared game clock reaches the loaded journey schedule.
 - At the terminal, the player gets off automatically through `GET_OFF_TRIP`
   after the final 30-game-second stop. This uses an existing transition.
+- `GAME_OVER` is allowed from every active state. Game Over accepts no events,
+  including another `GAME_OVER`; a fresh game is a new provider session.
+- `ENTER_STATION` does not charge money itself. Player entry uses fare actions,
+  which coordinate the wallet and transition without adding an FSM event.
 
 ## Player controls and scheduling
 
 | State | Available player actions |
 | --- | --- |
-| Outside | Enter Station; Quit Game. Entry is disabled until a starting station is selected. |
+| Outside | Pay fare ($3.00) or Jump turnstile; Quit Game. Entry requires a selected station. |
 | In Station | Choose a trip and wait for it; Leave Station. |
 | In Station (Waiting For Trip) | Cancel waiting, restoring In Station without a selected trip. |
 | On Trip In Station | Get off at the current station. |
 | In Transit | Get Off at Next Station. |
 | In Transit (Off At Next Station) | Cancel getting off. |
+| Game Over | Start New Game, creating a fresh session. |
+
+Paid entry requires at least $3.00 and deducts that fare. Turnstile jumping has
+a 1% chance of getting caught on each attempt. A caught player stays Outside:
+the first offense is a warning, the second costs $50, and the third and later
+offenses cost $150 each. Only getting caught increments the offense count. A
+fine may overdraw the wallet; the entry action immediately sends `GAME_OVER`
+when the resulting balance is negative. `GameOverWatcher` also observes debt
+from other fine callers. A zero balance is not Game Over. Fare actions read
+the committed wallet and FSM snapshots so consecutive clicks cannot use a
+stale rendered state to charge another entry or evade a terminal state.
 
 The provider fetches `/get_next_trips` with `station_id`, local game time in
 `HH:MM:SS`, and `day` (`weekday`, `saturday`, or `sunday`). Omitting `limit`
@@ -160,9 +191,21 @@ arrival; otherwise the player stays aboard until choosing to get off or
 reaching the terminal. The provider observes the existing shared clock and
 does not create another animation loop.
 
+Waiting automatically starts busking. `GameStateProvider` uses the journey's
+boarding arrival as the end of the wait, reserves one game minute for setup
+and at least one game minute for packing, and pays only complete earning
+minutes between them. Each earning minute pays $0.25–$5.00 in whole cents from
+a truncated geometric distribution. The provider settles completed earnings
+before schedule advancement or cancellation, including clock ticks that pass
+multiple events, and never pays the same minute twice. Canceling keeps paid
+earnings; a subsequent wait starts a new setup. `useBusking()` exposes the phase
+and progress for the UI and returns `null` when not waiting. Journey timing
+stays in `JourneyPlan`; Waiting does not store a duplicated departure time.
+
 Quit Game is available Outside and unmounts the active clock, wallet, and FSM.
-Start New Game creates a new Outside state with no selected station, a clock
-initialized to the current time at 1x, and a new random wallet. The station
+Start New Game after quitting or Game Over creates a new Outside state with no
+selected station, a clock initialized to the current time at 1x, a new random
+wallet, and cleared fare-evasion and busking history. The station
 catalog remains loaded. Session reset does not add an FSM event or transition.
 
 ## Runtime API
@@ -211,30 +254,34 @@ Events carrying information use `{ type, ...payload }` objects:
 | `ARRIVE_AT_STATION` | Required `stationId` and `stopArrivalGameTimeMs`; optional `nextTrips`, defaulting to an empty list. Staying aboard records the stop arrival time; an exit request instead moves to the supplied station and trip list. |
 | `REQUEST_EXIT` | Required `nextStopId`. Carries the trip ID into In Transit (Off At Next Station). |
 | `CANCEL_EXIT` | No payload. Keeps the trip ID and clears the exit request. |
+| `GAME_OVER` | No payload. Enters terminal Game Over from any active state and clears state-specific fields. |
 
 Bare strings remain supported for `ENTER_STATION`, `LEAVE_STATION`,
-`CANCEL_WAIT`, `DEPART_STATION`, and `CANCEL_EXIT`. Bare `ENTER_STATION` requires
+`CANCEL_WAIT`, `DEPART_STATION`, `CANCEL_EXIT`, and `GAME_OVER`. Bare `ENTER_STATION` requires
 an already selected Outside station. The other events require their documented
 payloads. Missing or invalid IDs, trip-list records, or timestamps are rejected.
 The caller is responsible for supplying the correct trip, stop, and station;
 the FSM does not validate them against a backend schedule.
 
 The `GameState` IDs are `outside`, `in_station`, `waiting_for_trip`,
-`on_trip_in_station`, `in_transit`, and `in_transit_off_at_next_station`.
+`on_trip_in_station`, `in_transit`, `in_transit_off_at_next_station`, and `game_over`.
 `GAME_STATE_LABELS` maps these IDs to the display names above. Events use the
 exact uppercase names in the transition table.
 
 `GameStateProvider` owns the app's shared machine and accepts an optional
 `initialStationId` prop. `useGameState()` from `src/game-state/context` exposes
-the state-specific information above plus `send` and `selectStartingStation`.
+the state-specific information above plus `send`, `selectStartingStation`, and
+`getSnapshot` for synchronous reads of the latest committed FSM state.
 The provider belongs inside
-`GameClockProvider` and `StationCatalogProvider`, since the hook and scheduler
-use the shared clock and station catalog. `useGameControls()` from
+`GameClockProvider`, `WalletProvider`, and `StationCatalogProvider`, since the
+scheduler and busker use the shared clock, wallet, and station catalog.
+`FareProvider` belongs inside the game-state provider and exposes the paid-entry
+and turnstile actions through `useStationEntry()`. `useGameControls()` from
 `src/game-state/controls-context` exposes the UI actions, trip-loading status,
 and active journey. See the [README example](../README.md#shared-state-and-controls)
 for usage.
-The Player state card displays the current label and fields between the wallet
-and clock, with **Not selected** for the app's initial `stationId: null`.
+The Player state card at the end of the dashboard displays the current label
+and fields, with **Not selected** for the app's initial `stationId: null`.
 At startup, a picker fetches available station IDs from the backend's
 `/all_stations` endpoint and resolves their names through the station catalog.
 The picker and Player state card display names; the FSM keeps only station IDs.
@@ -243,7 +290,7 @@ updates the Player state card, and dismisses the picker. Supplying an
 `initialStationId` skips the picker.
 
 There is no direct state setter or reset event. Reloading, or choosing Start
-New Game after quitting, remounts the provider and creates a fresh machine in
+New Game after quitting or Game Over, remounts the provider and creates a fresh machine in
 **Outside**. Player controls and scheduled events both use the documented graph.
 
 ## Validation scenarios
@@ -259,8 +306,8 @@ New Game after quitting, remounts the provider and creates a fresh machine in
    next arrival leaves the player aboard in On Trip In Station.
 6. **Reject invalid actions:** boarding from Outside, leaving while waiting or
    onboard, and `GET_OFF_TRIP` while in transit all leave the state unchanged.
-7. **Exhaustive transitions:** verify all 60 combinations of six states and ten
-   events: 11 succeed with the documented destination and 49 are rejected.
+7. **Exhaustive transitions:** verify all 77 combinations of seven states and
+   eleven events: 17 succeed with the documented destination and 60 are rejected.
 8. **Consecutive events and snapshots:** multiple valid events sent before a
    React rerender use the latest state. Rejected events preserve snapshot
    identity; successful events publish a new snapshot without changing earlier
@@ -286,13 +333,26 @@ New Game after quitting, remounts the provider and creates a fresh machine in
 15. **Guarded refresh:** accept new trip data only for the current In Station
     station; reject stale or invalid updates without changing the snapshot.
 16. **New session:** quit Outside, start again, choose a new station, and
-    verify the clock, random wallet, and FSM are fresh while the catalog remains.
+    verify the clock, random wallet, FSM, offense history, and busker are fresh
+    while the catalog remains. Repeat from Game Over.
+17. **Station entry:** charge exactly $3 on paid entry; reject insufficient
+    funds without moving or charging; enter freely on an uncaught jump; remain
+    Outside after a warning or affordable fine. Repeated actions use the latest
+    committed state and cannot double-charge an entry.
+18. **Debt and terminal state:** verify warning/$50/$150 escalation, immediate
+    Game Over after a fine produces debt, no Game Over at zero, and rejection
+    of every event once terminal.
+19. **Busking:** reserve setup and packing before boarding arrival, pay only
+    completed earning minutes once, and preserve earnings on cancellation.
+    Test short waits, restarted waits, boundary times, and accelerated ticks
+    that cross boarding and multiple stops without missed or duplicate payouts.
 
 ## Scope
 
 The frontend implements the runtime model, state information, player controls,
 station and trip lookups, and automatic schedule progression. It consumes the
 existing backend API without backend changes. The pure FSM remains event-driven;
-the provider supplies schedule events from the shared game clock. Fares and
-wallet deductions are not connected. Wallet payments do not trigger transitions,
-and ordinary state transitions do not change the clock or wallet.
+the provider supplies schedule events and busking payouts from the shared game
+clock. Fare actions connect paid entry and evasion penalties to the wallet and
+FSM. Debt ends the session through `GAME_OVER`; the pure state machine does not
+deduct or earn money itself.

@@ -69,9 +69,9 @@ speed. The clock uses monotonic elapsed time, independent of frame rate.
 ## Wallet
 
 Each game session starts with a random balance from $1.00 through $10.00,
-including cents. The wallet card displays the available balance. Clock ticks
-and speed changes do not affect it; reloading or starting a new game assigns a
-fresh balance. Station and trip controls do not charge fares.
+including cents. The wallet card displays the available balance. Paying fares,
+busking, and fines update it; reloading or starting a new game assigns a fresh
+balance.
 
 `WalletProvider` wraps the app. Game actions can read the balance and make a
 payment with `useWallet()`:
@@ -95,28 +95,72 @@ function BuyTicket() {
 }
 ```
 
-Both `balance` and `pay_money(amount)` use dollars. Money is stored internally
-as integer cents. A successful payment immediately deducts the amount and
-returns `true`; paying the exact balance is allowed. Insufficient funds or an
-invalid amount (nonfinite, nonpositive, or fractional-cent) returns `false`
-without changing the balance. Consecutive calls use the latest balance, even
-before React rerenders. The wallet has no deposits, persistence, or payment UI.
+`balance`, `pay_money(amount)`, `earn_money(amount)`, and `fine(amount)` use
+dollars. Money is stored internally as integer cents. A successful payment
+immediately deducts the amount and returns `true`; paying the exact balance is
+allowed. Insufficient funds or an invalid amount (nonfinite, nonpositive, or
+fractional-cent) returns `false` without changing the balance. `earn_money`
+adds money; `fine` deducts money and may leave a negative balance. Consecutive
+calls use the latest balance, even before React rerenders, and `getSnapshot()`
+reads that committed balance synchronously. The wallet has no persistence.
+
+## Entering the station
+
+After selecting a starting station, the station entry controls offer two ways
+in from **Outside**:
+
+- **Pay fare ($3.00):** deducts the fare and enters the station. A balance below
+  $3.00 cannot pay; paying the exact balance is allowed.
+- **Jump turnstile:** free, with a 1% chance of getting caught on each attempt.
+  A caught player stays outside. The first offense is a warning, the second
+  costs $50, and the third and every later offense cost $150. Only getting
+  caught counts as an offense.
+
+A fine that leaves the wallet below zero immediately sends `GAME_OVER` before
+another entry action can run. `GameOverWatcher` also watches for debt from other
+fine callers. A zero balance does not end the game. The Game Over screen offers
+a fresh start, resetting the wallet, offense history, busking, clock, and FSM.
+`FareProvider` and `useStationEntry()` connect the entry rules to the shared
+wallet and state machine. Sending `ENTER_STATION` directly is a pure state
+transition; UI entry must use the fare actions to apply these rules.
+
+## Busking
+
+The player automatically busks while **In Station (Waiting For Trip)**. A wait
+reserves one game minute for setup and at least one full game minute to pack up
+before the train's boarding **arrival**, with only whole minutes in between
+earning money. A train arriving in 5 game minutes allows 3 earning minutes.
+Short waits with no complete earning minute pay nothing.
+
+Each completed earning minute pays $0.25 to $5.00 in whole cents, sampled from
+a truncated geometric distribution that favors smaller amounts. Payments use
+`earn_money`; faster game speed accelerates the wait without changing the
+per-minute rules. Canceling keeps completed earnings and discards an unfinished
+minute. Waiting again starts a new setup. Clock jumps settle all completed
+earning minutes once before boarding or cancellation, so a fast tick cannot
+skip or duplicate payouts.
+
+`GameStateProvider` owns the busker and exposes its phase and progress through
+`useBusking()` for the Busking card; the hook returns `null` outside a wait.
+The active journey's boarding arrival is the timing source, with no separate
+departure timestamp added to the waiting FSM state.
 
 ## Game state machine
 
-The [FSM definition](docs/game-state-machine.md) describes the six player states
-and eleven allowed transitions, starting in **Outside**. The Player state card
-shows the current state, its information, and the available controls between
-the wallet and clock.
+The [FSM definition](docs/game-state-machine.md) describes the seven player states
+and seventeen allowed transitions, starting in **Outside**. The Player state card
+at the end of the dashboard shows the current state, its information, and the
+available controls.
 
 | State | Controls |
 | --- | --- |
-| Outside | **Enter Station** after selecting a station; **Quit Game**. |
+| Outside | **Pay fare ($3.00)** or **Jump turnstile** after selecting a station; **Quit Game**. |
 | In Station | Choose a trip and **Wait for this trip**; **Leave Station**. |
 | In Station (Waiting For Trip) | **Cancel waiting**, returning to In Station with no selected trip. |
 | On Trip In Station | **Get off** at the current station. |
 | In Transit | **Get Off at Next Station**. |
 | In Transit (Off At Next Station) | **Cancel getting off**, remaining aboard at the next stop. |
+| Game Over | **Start New Game** resets the session. |
 
 Entering a station loads its remaining-day trips. The state fields show the
 remaining-trip count; the chooser shows each trip's arrival time, route, and
@@ -134,11 +178,12 @@ events applies them in order.
 
 **Quit Game** is available Outside and ends the session. **Start New Game**
 returns to station selection with a new current-time clock at 1x, a new random
-wallet, and a fresh Outside state. The loaded station catalog is retained.
+wallet, a fresh Outside state, and cleared fare-evasion and busking history.
+The loaded station catalog is retained. The same reset is available after Game Over.
 
 ### Route progress
 
-The Route progress card below Player state shows the selected
+The Route progress card above the map shows the selected
 line and destination, the current station or travel segment, and the next
 station's arrival countdown in game time. While waiting it counts down to the
 train's arrival; while stopped it counts down to departure. The terminal is
@@ -188,11 +233,13 @@ previous departure. Stop IDs resolve to the known station catalog by an exact
 match or by removing one final `N`/`S` only when the resulting parent ID exists
 in that catalog. Unsupported stops produce a visible error rather than an
 invented station. These are frontend integrations with the existing backend;
-no backend changes or fares are included.
+no backend changes are needed. Fare and busking rules run in the frontend.
 
 ### Shared state and controls
 
-`GameStateProvider` wraps the app inside `GameClockProvider`. Its optional
+`GameStateProvider` wraps the app inside `GameClockProvider` and `WalletProvider`.
+`FareProvider` is nested inside the game-state provider so entry actions can use
+both the wallet and current player state. The game-state provider's optional
 `initialStationId` prop selects the starting station; without it, Outside has
 `stationId: null` and the picker lets the player choose. The card shows
 **Not selected** until then. `useGameState().selectStartingStation(stationId)`
@@ -200,30 +247,29 @@ accepts a nonempty ID only while Outside with an unassigned station; it returns
 `true` on success and `false` without mutation otherwise. This initialization
 action keeps the existing state and transition graph intact. Other components
 access the state-specific fields through `useGameState()`. UI actions use
-`useGameControls()`, which coordinates schedule loading and journey progress:
+`useGameControls()` for schedule loading and journey progress, and
+`useStationEntry()` for fare-aware entry:
 
 ```tsx
-import { useGameState } from './game-state/context'
-import { useGameControls } from './game-state/controls-context'
+import { useStationEntry } from './fare/context'
 
 function StationEntrance() {
-  const player = useGameState()
-  const { enterStation } = useGameControls()
-  if (player.state !== 'outside') return null
+  const { canEnter, payFare } = useStationEntry()
 
   return (
-    <button onClick={enterStation} disabled={player.stationId === null}>
-      Enter Station
+    <button onClick={payFare} disabled={!canEnter}>
+      Pay fare — $3.00
     </button>
   )
 }
 ```
 
-The hook returns a discriminated union: check `state` before reading that
+`useGameState()` returns a discriminated union: check `state` before reading that
 state's fields. Outside exposes `stationId`; In Station exposes `stationId` and
 `nextTrips`; Waiting exposes `stationId` and `tripId`; On Trip In Station exposes
 `tripId`, `stopArrivalGameTimeMs`, and `remainingStopTimeMs`; In Transit exposes
-`tripId`; and In Transit (Off At Next Station) exposes `tripId` and `nextStopId`.
+`tripId`; In Transit (Off At Next Station) exposes `tripId` and `nextStopId`;
+and terminal Game Over has no location or trip fields.
 
 The model accepts upcoming trips as `{ tripId, departureGameTimeMs }` records
 on station entry, arrival, or a guarded station-data refresh. The provider
@@ -235,8 +281,9 @@ the local game day, sorted by departure time. The stopped-train countdown uses
 restart the stop. Clock speed affects these derived fields.
 
 `send(event)` returns `true` after immediately committing an allowed transition.
-Consecutive calls use the latest state, even before React rerenders. An invalid
-event or missing required payload returns `false` and leaves the state and
+Consecutive calls use the latest state, even before React rerenders.
+`useGameState().getSnapshot()` reads the committed FSM snapshot for action guards.
+An invalid event or missing required payload returns `false` and leaves the state and
 snapshot unchanged. Events needing new information use objects, for example
 `send({ type: 'WAIT_FOR_TRIP', tripId })` and
 `send({ type: 'BOARD_TRIP', stopArrivalGameTimeMs })`. Events needing no payload
@@ -251,7 +298,8 @@ departure, arrival, and terminal disembarkation events. Its
 `refreshStationTrips(stationId, trips)` model method updates only trip data when
 the player is In Station at that same station; invalid or stale-station updates
 are rejected without mutation. It does not add a state transition or reset the
-player's location. Wallet payments do not trigger transitions.
+player's location. Fare actions combine payment and entry; a negative balance
+ends the game through `GAME_OVER`. The pure FSM itself does not mutate money.
 
 ## Checks and production build
 

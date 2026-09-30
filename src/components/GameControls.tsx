@@ -5,6 +5,7 @@ import { useGameState } from '../game-state/context'
 import { useGameControls } from '../game-state/controls-context'
 import { useStationCatalog } from '../stations/context'
 import { STOP_DURATION_MS } from '../game-state/state-machine'
+import { StationEntry } from './StationEntry'
 
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
@@ -80,9 +81,7 @@ export function GameControls() {
       {controls.actionError && <p role="alert">{controls.actionError}</p>}
       {info.state === 'outside' && (
         <>
-          <button type="button" onClick={controls.enterStation} disabled={info.stationId === null}>
-            Enter Station
-          </button>
+          <StationEntry />
           <button type="button" className="secondary-button" onClick={controls.quitGame}>Quit Game</button>
         </>
       )}

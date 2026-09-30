@@ -44,6 +44,33 @@ main {
   box-shadow: 0 12px 40px #11182708;
 }
 
+.busking-card {
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid #bbf7d0;
+  border-radius: 1.5rem;
+  background: #f0fdf4;
+}
+
+.busking-card h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.busking-card .player-state-details,
+.busking-card .player-state-header {
+  min-height: 0;
+}
+
+.station-entry-actions {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.game-controls .station-entry-message {
+  margin: 0.75rem 0 0;
+}
+
 .wallet-card,
 .player-state-header {
   display: flex;

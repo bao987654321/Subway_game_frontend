@@ -209,7 +209,8 @@ export function advanceJourney(
   // A trip has at most one boarding, one departure per stop, and one arrival per later stop.
   for (let eventCount = 0; eventCount < plan.stops.length * 2 + 2; eventCount++) {
     const snapshot = machine.getSnapshot()
-    if (snapshot.state === 'outside' || snapshot.state === 'in_station') return null
+    if (snapshot.state === 'outside' || snapshot.state === 'in_station' ||
+      snapshot.state === 'game_over') return null
     if (snapshot.tripId !== plan.tripId) return null
 
     const stop = plan.stops[current.stopIndex]!

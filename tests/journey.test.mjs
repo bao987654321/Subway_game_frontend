@@ -155,6 +155,28 @@ test('manual get-off clears journey tracking without boarding again', () => {
   assert.equal(machine.getSnapshot(), snapshot)
 })
 
+test('game over ends journey tracking without processing any scheduled events', () => {
+  for (const elapsed of [-1, 0, 30_000, 120_000]) {
+    const { machine, progress } = waitingJourney()
+    const current = advanceJourney(machine, progress, start + elapsed)
+    assert.ok(current)
+    assert.equal(machine.send('GAME_OVER'), true)
+    const ended = machine.getSnapshot()
+    let eventCount = 0
+    const trackingMachine = {
+      getSnapshot: machine.getSnapshot,
+      send(event) {
+        eventCount += 1
+        return machine.send(event)
+      },
+    }
+    assert.equal(advanceJourney(trackingMachine, current, start + 1_000_000), null)
+    assert.equal(eventCount, 0)
+    assert.equal(machine.getSnapshot(), ended)
+    assert.deepEqual(ended, { state: 'game_over' })
+  }
+})
+
 test('cancelling a wait or leaving the station ends journey tracking', () => {
   const { machine, progress } = waitingJourney()
   machine.send('CANCEL_WAIT')

@@ -4,6 +4,8 @@ import { getGameStateInfo } from './state-machine'
 import type { GameEvent, GameStateInfo, GameStateSnapshot } from './state-machine'
 
 interface GameStateActions {
+  /** Read the current model, including changes before React renders. */
+  getSnapshot: () => GameStateSnapshot
   /** Apply an allowed event; false leaves the state unchanged. */
   send: (event: GameEvent) => boolean
   /** Choose the initial station while outside; false leaves the state unchanged. */
@@ -25,6 +27,7 @@ export function useGameState(): GameStateContextValue {
   return {
     ...getGameStateInfo(gameState, gameTimeMs),
     send: gameState.send,
+    getSnapshot: gameState.getSnapshot,
     selectStartingStation: gameState.selectStartingStation,
   }
 }
