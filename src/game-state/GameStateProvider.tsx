@@ -141,7 +141,7 @@ export function GameStateProvider({
     send('LEAVE_STATION')
   }
 
-  async function chooseTrip(tripId: string, stopSequence: number) {
+  async function chooseTrip(tripId: string, stopSequence: number, tripLetter: string) {
     const current = machine.getSnapshot()
     const list = tripListRef.current
     if (current.state !== 'in_station' || tripRequestRef.current !== null ||
@@ -169,7 +169,7 @@ export function GameStateProvider({
         setActionError('That trip left while its schedule was loading. Please choose another trip.')
         return
       }
-      if (send({ type: 'WAIT_FOR_TRIP', tripId: trip.tripId })) {
+      if (send({ type: 'WAIT_FOR_TRIP', tripId: trip.tripId, tripLetter })) {
         publishJourney({ plan, stopIndex: plan.boardingIndex })
         syncJourney()
       }
