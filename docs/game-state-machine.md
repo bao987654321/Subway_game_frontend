@@ -25,10 +25,17 @@ state. “On Trip” and “On Trip (Off At Next Station)” refer to the existi
 | --- | --- |
 | Outside | `stationId: string \| null`; `null` means no station has been selected. |
 | In Station | `stationId: string`; `nextTrips: { tripId: string; departureGameTimeMs: number }[]`. |
-| In Station (Waiting For Trip) | `tripId: string`; retained `stationId: string` for cancellation. |
+| In Station (Waiting For Trip) | `tripId: string`; `routeLetter: string`; retained `stationId: string` for cancellation. |
 | On Trip In Station | `tripId: string`; `stopArrivalGameTimeMs: number`; derived `remainingStopTimeMs: number`. |
 | In Transit (Off At Next Station) | `tripId: string`; `nextStopId: string`. |
 | In Transit | `tripId: string`. |
+
+Every state also includes an immutable `tripLetters: readonly string[]` history.
+`WAIT_FOR_TRIP` stores the selected route label without collecting it;
+`BOARD_TRIP` appends it once. Arrivals while remaining aboard do not add labels.
+Canceling a wait leaves the history unchanged. Station refreshes and every other
+transition preserve it, including repeated route labels. A new machine starts
+with an empty history.
 
 The state and its fields form a discriminated union. Components narrow on
 `state` to access the relevant information; unrelated fields are not retained
@@ -203,9 +210,9 @@ Events carrying information use `{ type, ...payload }` objects:
 | --- | --- |
 | `ENTER_STATION` | Optional `stationId` and `nextTrips`. Uses the current Outside station when `stationId` is omitted; rejects entry if no station is selected. Omitted `nextTrips` defaults to an empty list. |
 | `LEAVE_STATION` | No payload. Carries the current station ID into Outside. |
-| `WAIT_FOR_TRIP` | Required `tripId`. Retains the current station and its supplied trips for cancellation. |
+| `WAIT_FOR_TRIP` | Required nonempty `tripId` and `tripLetter`. Retains the route as `routeLetter`, along with the current station and its supplied trips for cancellation. The provider supplies the selected trip's route ID. |
 | `CANCEL_WAIT` | No payload. Restores the station and its supplied trip list; the hook filters that list against the current game time. |
-| `BOARD_TRIP` | Required `stopArrivalGameTimeMs`. Carries the selected trip into On Trip In Station. |
+| `BOARD_TRIP` | Required `stopArrivalGameTimeMs`. Carries the selected trip into On Trip In Station and appends its stored route label to `tripLetters`. |
 | `GET_OFF_TRIP` | Required `stationId`; optional `nextTrips`, defaulting to an empty list. Returns to the supplied parent station. |
 | `DEPART_STATION` | No payload. Carries the trip ID into In Transit. |
 | `ARRIVE_AT_STATION` | Required `stationId` and `stopArrivalGameTimeMs`; optional `nextTrips`, defaulting to an empty list. Staying aboard records the stop arrival time; an exit request instead moves to the supplied station and trip list. |

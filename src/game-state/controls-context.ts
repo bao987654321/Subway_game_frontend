@@ -17,7 +17,7 @@ export interface GameControlsContextValue {
   enterStation: () => void
   leaveStation: () => void
   refreshTrips: () => void
-  chooseTrip: (tripId: string, stopSequence: number, tripLetter: string) => Promise<void>
+  chooseTrip: (tripId: string, stopSequence: number) => Promise<void>
   cancelWait: () => void
   getOff: () => void
   requestExit: () => void

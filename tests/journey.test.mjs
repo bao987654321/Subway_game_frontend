@@ -20,7 +20,7 @@ function waitingJourney() {
   const plan = createJourneyPlan(trip, stops, 'L06', stationIds)
   const machine = createGameStateMachine('L06')
   machine.send('ENTER_STATION')
-  machine.send({ type: 'WAIT_FOR_TRIP', tripId: trip.tripId })
+  machine.send({ type: 'WAIT_FOR_TRIP', tripId: trip.tripId, tripLetter: trip.routeId })
   return { machine, progress: { plan, stopIndex: plan.boardingIndex } }
 }
 
@@ -106,7 +106,9 @@ test('waits, boards, departs, arrives, and gets off at the terminus using game t
   assert.equal(advanceJourney(machine, progress, start - 1), progress)
   assert.equal(machine.getSnapshot().state, 'waiting_for_trip')
   assert.equal(advanceJourney(machine, progress, start), progress)
-  assert.deepEqual(machine.getSnapshot(), { state: 'on_trip_in_station', tripId: 'L-trip', stopArrivalGameTimeMs: start })
+  assert.deepEqual(machine.getSnapshot(), {
+    state: 'on_trip_in_station', tripId: 'L-trip', stopArrivalGameTimeMs: start, tripLetters: ['L'],
+  })
   assert.equal(advanceJourney(machine, progress, start + 29_999), progress)
   assert.equal(machine.getSnapshot().state, 'on_trip_in_station')
   assert.equal(advanceJourney(machine, progress, start + 30_000), progress)
@@ -123,7 +125,7 @@ test('waits, boards, departs, arrives, and gets off at the terminus using game t
   assert.equal(machine.getSnapshot().state, 'on_trip_in_station')
   assert.equal(advanceJourney(machine, third, start + 269_999), third)
   assert.equal(advanceJourney(machine, third, start + 270_000), null)
-  assert.deepEqual(machine.getSnapshot(), { state: 'in_station', stationId: 'L03', nextTrips: [] })
+  assert.deepEqual(machine.getSnapshot(), { state: 'in_station', stationId: 'L03', nextTrips: [], tripLetters: ['L'] })
 })
 
 test('a requested exit enters the next parent station and ends the journey', () => {
@@ -133,7 +135,7 @@ test('a requested exit enters the next parent station and ends the journey', () 
   assert.equal(advanceJourney(machine, progress, start + 119_999), progress)
   assert.equal(machine.getSnapshot().state, 'in_transit_off_at_next_station')
   assert.equal(advanceJourney(machine, progress, start + 120_000), null)
-  assert.deepEqual(machine.getSnapshot(), { state: 'in_station', stationId: 'L05', nextTrips: [] })
+  assert.deepEqual(machine.getSnapshot(), { state: 'in_station', stationId: 'L05', nextTrips: [], tripLetters: ['L'] })
 })
 
 test('cancelling an exit remains on the trip when the next station arrives', () => {
@@ -170,19 +172,26 @@ test('large clock jumps process every elapsed event without losing arrival index
   assert.equal(next.stopIndex, 2)
   assert.equal(machine.getSnapshot().state, 'on_trip_in_station')
   assert.equal(machine.getSnapshot().stopArrivalGameTimeMs, start + 240_000)
+  assert.deepEqual(machine.getSnapshot().tripLetters, ['L'], 'passing multiple stops records one boarding')
+  const history = machine.getSnapshot().tripLetters
+  assert.equal(advanceJourney(machine, next, start + 245_000), next)
+  assert.equal(machine.getSnapshot().tripLetters, history, 'repeated clock updates do not add boardings')
   assert.equal(advanceJourney(machine, next, start + 270_000), null)
   assert.equal(machine.getSnapshot().stationId, 'L03')
+  assert.equal(machine.getSnapshot().tripLetters, history)
 })
 
 test('a single clock jump can complete a trip and still honors a requested intermediate exit', () => {
   const complete = waitingJourney()
   assert.equal(advanceJourney(complete.machine, complete.progress, start + 1_000_000), null)
   assert.equal(complete.machine.getSnapshot().stationId, 'L03')
+  assert.deepEqual(complete.machine.getSnapshot().tripLetters, ['L'])
   const exiting = waitingJourney()
   advanceJourney(exiting.machine, exiting.progress, start + 30_000)
   exiting.machine.send({ type: 'REQUEST_EXIT', nextStopId: 'L05N' })
   assert.equal(advanceJourney(exiting.machine, exiting.progress, start + 1_000_000), null)
   assert.equal(exiting.machine.getSnapshot().stationId, 'L05')
+  assert.deepEqual(exiting.machine.getSnapshot().tripLetters, ['L'])
 })
 
 test('boarding after the scheduled arrival retains the original dwell deadline', () => {
@@ -206,7 +215,7 @@ test('one-stop journeys get off after the terminal dwell', () => {
 test('stale journey plans do not advance a different selected trip', () => {
   const { machine, progress } = waitingJourney()
   machine.send('CANCEL_WAIT')
-  machine.send({ type: 'WAIT_FOR_TRIP', tripId: 'different-trip' })
+  machine.send({ type: 'WAIT_FOR_TRIP', tripId: 'different-trip', tripLetter: '7' })
   const before = machine.getSnapshot()
   assert.equal(advanceJourney(machine, progress, start + 1_000_000), null)
   assert.equal(machine.getSnapshot(), before)

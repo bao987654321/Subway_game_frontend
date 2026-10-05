@@ -40,7 +40,7 @@ function TripChooser() {
 
   function waitForTrip(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (selected) void chooseTrip(selected.tripId, selected.stopSequence, selected.routeId)
+    if (selected) void chooseTrip(selected.tripId, selected.stopSequence)
   }
 
   return (

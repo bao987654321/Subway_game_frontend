@@ -1,0 +1,46 @@
+.trip-letters-card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 34rem;
+  padding: 1.5rem;
+  border: 1px solid #e2e6ec;
+  border-radius: 1.5rem;
+  color: #111827;
+  background: #ffffff;
+  box-shadow: 0 12px 40px #11182708;
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+.trip-letters-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.trip-letters-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0;
+  margin: 1rem 0 0;
+  list-style: none;
+}
+
+.trip-letters-badge {
+  display: grid;
+  flex: 0 0 2.25rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.trip-letters-empty {
+  margin: 0.75rem 0 0;
+  color: #667085;
+  font-size: 0.875rem;
+}

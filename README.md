@@ -14,6 +14,38 @@ npm run dev
 
 Open http://127.0.0.1:5173.
 
+## Collected trip letters
+
+The Trip letters card shows the routes boarded during the current game, in order.
+Boarding adds one route label; remaining aboard through another stop adds nothing.
+Repeated boardings preserve duplicate labels. Canceling a wait adds nothing, and
+returning to a station or refreshing its trips preserves the collection. Starting
+a new game clears it.
+
+## Component development with Storybook
+
+Run `npm run storybook` and open http://127.0.0.1:6006. Under **Components /
+TripLetters**, edit the `letters` array control to preview collected route letters.
+Stories cover multiple letters, a single letter, no trips, repeated routes, and
+a long sequence that wraps onto multiple lines. The Docs tab describes the prop.
+
+`TripLetters` is presentational and needs no game providers or API calls:
+
+```tsx
+<TripLetters letters={['A', 'C', 'E', 'L']} />
+```
+
+It preserves the order and repeated labels in the supplied array. Badge colors
+come from `src/components/trip-letter-colors.ts`. Exact route matches take
+priority, then the first letter (for example, `C7` uses `C`), with a neutral
+fallback when neither matches. The **Route Colors** story previews the palette. The separate
+`GameTripLetters` wrapper passes the game's collected routes to it.
+
+If port 6006 is busy, use `npm run storybook -- --port 6007`.
+
+Run `npm run build-storybook` to type-check the stories and configuration and
+produce a static Storybook in `storybook-static/`.
+
 ## Starting station
 
 On each page load, the starting-station picker requests `GET /all_stations`
@@ -220,8 +252,9 @@ function StationEntrance() {
 ```
 
 The hook returns a discriminated union: check `state` before reading that
-state's fields. Outside exposes `stationId`; In Station exposes `stationId` and
-`nextTrips`; Waiting exposes `stationId` and `tripId`; On Trip In Station exposes
+state's fields. Every state includes an immutable `tripLetters` array. Outside
+exposes `stationId`; In Station exposes `stationId` and `nextTrips`; Waiting
+exposes `stationId`, `tripId`, and `routeLetter`; On Trip In Station exposes
 `tripId`, `stopArrivalGameTimeMs`, and `remainingStopTimeMs`; In Transit exposes
 `tripId`; and In Transit (Off At Next Station) exposes `tripId` and `nextStopId`.
 
@@ -238,7 +271,7 @@ restart the stop. Clock speed affects these derived fields.
 Consecutive calls use the latest state, even before React rerenders. An invalid
 event or missing required payload returns `false` and leaves the state and
 snapshot unchanged. Events needing new information use objects, for example
-`send({ type: 'WAIT_FOR_TRIP', tripId })` and
+`send({ type: 'WAIT_FOR_TRIP', tripId, tripLetter })` and
 `send({ type: 'BOARD_TRIP', stopArrivalGameTimeMs })`. Events needing no payload
 can still use strings, such as `send('CANCEL_WAIT')`. See the FSM document for
 the complete payload contract. State changes must follow the documented graph;
