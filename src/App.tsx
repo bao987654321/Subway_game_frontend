@@ -8,6 +8,7 @@ import { GameStateProvider } from './game-state/GameStateProvider'
 import { WalletProvider } from './wallet/WalletProvider'
 import { RouteProgress } from './components/RouteProgress'
 import { RouteMap } from './components/RouteMap'
+import { GameTripLetters } from './components/GameTripLetters'
 
 function App() {
   const [playing, setPlaying] = useState(true)
@@ -18,6 +19,7 @@ function App() {
           <GameClockProvider>
             <GameStateProvider onQuit={() => setPlaying(false)}>
               <WalletProvider>
+                <GameTripLetters />
                 <GameClock />
                 <StartingStationPicker />
                 <Wallet />

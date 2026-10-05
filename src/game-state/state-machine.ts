@@ -28,23 +28,32 @@ export interface UpcomingTrip {
 }
 
 export type GameStateSnapshot =
-  | Readonly<{ state: 'outside'; stationId: string | null }>
+  | Readonly<{ state: 'outside'; stationId: string | null; tripLetters: readonly string[] }>
   | Readonly<{
       state: 'in_station'
       stationId: string
       nextTrips: readonly UpcomingTrip[]
+      tripLetters: readonly string[]
     }>
-  | Readonly<{ state: 'waiting_for_trip'; stationId: string; tripId: string }>
+  | Readonly<{
+      state: 'waiting_for_trip'
+      stationId: string
+      tripId: string
+      tripLetters: readonly string[]
+      routeLetter: string
+    }>
   | Readonly<{
       state: 'on_trip_in_station'
       tripId: string
       stopArrivalGameTimeMs: number
+      tripLetters: readonly string[]
     }>
-  | Readonly<{ state: 'in_transit'; tripId: string }>
+  | Readonly<{ state: 'in_transit'; tripId: string; tripLetters: readonly string[] }>
   | Readonly<{
       state: 'in_transit_off_at_next_station'
       tripId: string
       nextStopId: string
+      tripLetters: readonly string[]
     }>
 
 export type GameStateInfo =
@@ -63,7 +72,7 @@ type SimpleGameEvent =
 type GameEventPayload =
   | { type: 'ENTER_STATION'; stationId?: string; nextTrips?: readonly UpcomingTrip[] }
   | { type: Exclude<SimpleGameEvent, 'ENTER_STATION'> }
-  | { type: 'WAIT_FOR_TRIP'; tripId: string }
+  | { type: 'WAIT_FOR_TRIP'; tripId: string; tripLetter: string }
   | { type: 'BOARD_TRIP'; stopArrivalGameTimeMs: number }
   | { type: 'GET_OFF_TRIP'; stationId: string; nextTrips?: readonly UpcomingTrip[] }
   | {
@@ -168,6 +177,7 @@ export function createGameStateMachine(initialStationId: string | null = null) {
   let snapshot: GameStateSnapshot = Object.freeze({
     state: 'outside',
     stationId: initialStationId,
+    tripLetters: Object.freeze([]),
   })
   // Retain the supplied departures while waiting so cancelling restores the station.
   let waitingTrips: readonly UpcomingTrip[] = Object.freeze([])
@@ -179,7 +189,7 @@ export function createGameStateMachine(initialStationId: string | null = null) {
         return false
       }
 
-      snapshot = Object.freeze({ state: 'outside', stationId })
+      snapshot = Object.freeze({ state: 'outside', stationId, tripLetters: snapshot.tripLetters })
       return true
     },
     refreshStationTrips(stationId: string, trips: readonly UpcomingTrip[]): boolean {
@@ -191,7 +201,7 @@ export function createGameStateMachine(initialStationId: string | null = null) {
       const nextTrips = copyTrips(trips)
       if (nextTrips === null) return false
 
-      snapshot = Object.freeze({ state: 'in_station', stationId, nextTrips })
+      snapshot = Object.freeze({ state: 'in_station', stationId, nextTrips, tripLetters: snapshot.tripLetters })
       return true
     },
     send(event: GameEvent): boolean {
@@ -202,25 +212,30 @@ export function createGameStateMachine(initialStationId: string | null = null) {
       if (!Object.hasOwn(availableTransitions, input.type)) return false
 
       let nextSnapshot: GameStateSnapshot
+      const tripLetters = snapshot.tripLetters
       switch (input.type) {
         case 'ENTER_STATION': {
           if (snapshot.state !== 'outside') return false
           const stationId = input.stationId === undefined ? snapshot.stationId : input.stationId
           const nextTrips = copyTrips(input.nextTrips)
           if (!isId(stationId) || nextTrips === null) return false
-          nextSnapshot = { state: 'in_station', stationId, nextTrips }
+          nextSnapshot = { state: 'in_station', stationId, nextTrips, tripLetters }
           break
         }
         case 'LEAVE_STATION':
           if (snapshot.state !== 'in_station') return false
-          nextSnapshot = { state: 'outside', stationId: snapshot.stationId }
+          nextSnapshot = { state: 'outside', stationId: snapshot.stationId, tripLetters }
           break
         case 'WAIT_FOR_TRIP':
-          if (snapshot.state !== 'in_station' || !isId(input.tripId)) return false
+          if (snapshot.state !== 'in_station' || !isId(input.tripId) || !isId(input.tripLetter)) {
+            return false
+          }
           nextSnapshot = {
             state: 'waiting_for_trip',
             stationId: snapshot.stationId,
             tripId: input.tripId,
+            tripLetters,
+            routeLetter: input.tripLetter,
           }
           waitingTrips = snapshot.nextTrips
           break
@@ -230,6 +245,7 @@ export function createGameStateMachine(initialStationId: string | null = null) {
             state: 'in_station',
             stationId: snapshot.stationId,
             nextTrips: waitingTrips,
+            tripLetters,
           }
           break
         case 'BOARD_TRIP':
@@ -240,18 +256,19 @@ export function createGameStateMachine(initialStationId: string | null = null) {
             state: 'on_trip_in_station',
             tripId: snapshot.tripId,
             stopArrivalGameTimeMs: input.stopArrivalGameTimeMs,
+            tripLetters: Object.freeze([...tripLetters, snapshot.routeLetter]),
           }
           break
         case 'GET_OFF_TRIP': {
           if (!isId(input.stationId)) return false
           const nextTrips = copyTrips(input.nextTrips)
           if (nextTrips === null) return false
-          nextSnapshot = { state: 'in_station', stationId: input.stationId, nextTrips }
+          nextSnapshot = { state: 'in_station', stationId: input.stationId, nextTrips, tripLetters }
           break
         }
         case 'DEPART_STATION':
           if (snapshot.state !== 'on_trip_in_station') return false
-          nextSnapshot = { state: 'in_transit', tripId: snapshot.tripId }
+          nextSnapshot = { state: 'in_transit', tripId: snapshot.tripId, tripLetters }
           break
         case 'ARRIVE_AT_STATION': {
           if (!isId(input.stationId) || !isTimestamp(input.stopArrivalGameTimeMs)) return false
@@ -262,9 +279,10 @@ export function createGameStateMachine(initialStationId: string | null = null) {
               state: 'on_trip_in_station',
               tripId: snapshot.tripId,
               stopArrivalGameTimeMs: input.stopArrivalGameTimeMs,
+              tripLetters,
             }
           } else if (snapshot.state === 'in_transit_off_at_next_station') {
-            nextSnapshot = { state: 'in_station', stationId: input.stationId, nextTrips }
+            nextSnapshot = { state: 'in_station', stationId: input.stationId, nextTrips, tripLetters }
           } else {
             return false
           }
@@ -276,11 +294,12 @@ export function createGameStateMachine(initialStationId: string | null = null) {
             state: 'in_transit_off_at_next_station',
             tripId: snapshot.tripId,
             nextStopId: input.nextStopId,
+            tripLetters,
           }
           break
         case 'CANCEL_EXIT':
           if (snapshot.state !== 'in_transit_off_at_next_station') return false
-          nextSnapshot = { state: 'in_transit', tripId: snapshot.tripId }
+          nextSnapshot = { state: 'in_transit', tripId: snapshot.tripId, tripLetters }
           break
         default:
           return false

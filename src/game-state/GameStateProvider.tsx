@@ -169,7 +169,7 @@ export function GameStateProvider({
         setActionError('That trip left while its schedule was loading. Please choose another trip.')
         return
       }
-      if (send({ type: 'WAIT_FOR_TRIP', tripId: trip.tripId })) {
+      if (send({ type: 'WAIT_FOR_TRIP', tripId: trip.tripId, tripLetter: trip.routeId })) {
         publishJourney({ plan, stopIndex: plan.boardingIndex })
         syncJourney()
       }
